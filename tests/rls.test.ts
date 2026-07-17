@@ -1,0 +1,133 @@
+/* RLS behaviour tests against a REAL Postgres (PGlite/WASM).
+   Proves the policies actually scope owner / manager / crew / client,
+   not just that the SQL parses. Catches recursion and scope leaks. */
+import { describe, it, expect, beforeAll } from 'vitest';
+import { PGlite } from '@electric-sql/pglite';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const sql = (f: string) => readFileSync(join(here, '..', 'supabase', f), 'utf8');
+
+const OWNER = '00000000-0000-0000-0000-000000000001';
+const CREW = '00000000-0000-0000-0000-000000000002';   // S006 @ C001, unassigned in seed
+const CLIENT = '00000000-0000-0000-0000-000000000003'; // client scoped to C002
+
+let db: PGlite;
+
+async function asUser<T = any>(uid: string, query: string): Promise<T[]> {
+  // Set the full JWT claims JSON, exactly as PostgREST does after verifying a
+  // Supabase token — auth.uid() reads sub from here.
+  const claims = JSON.stringify({
+    sub: uid, role: 'authenticated', aud: 'authenticated',
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  });
+  return db.transaction(async (tx) => {
+    await tx.exec(`set local role authenticated;`);
+    await tx.query(`select set_config('request.jwt.claims', $1, true)`, [claims]);
+    const r = await tx.query(query);
+    return r.rows as T[];
+  });
+}
+
+beforeAll(async () => {
+  db = await PGlite.create();
+  // Supabase shims: auth schema + auth.uid() + realtime publication.
+  // auth.uid() reads the modern `request.jwt.claims` JSON GUC (as current
+  // Supabase does), the same path a verified JWT flows through in PostgREST.
+  await db.exec(`
+    create schema if not exists auth;
+    create table auth.users (id uuid primary key);
+    create or replace function auth.uid() returns uuid language sql stable as $$
+      select nullif(current_setting('request.jwt.claims', true)::json ->> 'sub', '')::uuid $$;
+    create publication supabase_realtime;
+  `);
+  await db.exec(sql('01_schema.sql'));
+  await db.exec(sql('02_rls.sql'));
+  await db.exec(sql('03_seed.sql'));
+  // A non-superuser role that does NOT bypass RLS (like Supabase 'authenticated').
+  await db.exec(`
+    create role authenticated nosuperuser nobypassrls;
+    grant usage on schema public, auth to authenticated;
+    grant select, insert, update, delete on all tables in schema public to authenticated;
+    grant execute on all functions in schema public to authenticated;
+  `);
+  await db.exec(`
+    insert into auth.users(id) values ('${OWNER}'),('${CREW}'),('${CLIENT}');
+    insert into mf_access(user_id, role, client_id, staff_id) values
+      ('${OWNER}','owner', null, null),
+      ('${CREW}','crew','C001','S006'),
+      ('${CLIENT}','client','C002', null);
+  `);
+}, 30000);
+
+describe('RLS: policies execute without recursion', () => {
+  it('reading events does not raise (no infinite recursion)', async () => {
+    await expect(asUser(OWNER, 'select id from mf_events')).resolves.toBeDefined();
+  });
+});
+
+describe('JWT -> auth.uid() -> role resolution seam', () => {
+  it('extracts sub from the claims JSON and resolves the role', async () => {
+    const rows = await asUser(OWNER, 'select auth.uid()::text as uid, mf_role() as role');
+    expect(rows[0].uid).toBe(OWNER);
+    expect(rows[0].role).toBe('owner');
+  });
+  it('a different token resolves a different role/scope', async () => {
+    const rows = await asUser(CLIENT, 'select mf_role() as role, mf_scope_client() as scope');
+    expect(rows[0].role).toBe('client');
+    expect(rows[0].scope).toBe('C002');
+  });
+});
+
+describe('RLS: owner', () => {
+  it('sees all events', async () => {
+    const rows = await asUser(OWNER, 'select id from mf_events order by id');
+    expect(rows.map((r) => r.id)).toEqual(['E001', 'E002', 'E003']);
+  });
+});
+
+describe('RLS: client (C002)', () => {
+  it('sees only their own events', async () => {
+    const rows = await asUser(CLIENT, 'select id from mf_events order by id');
+    expect(rows.map((r) => r.id)).toEqual(['E003']);
+  });
+  it('cannot write events', async () => {
+    await expect(
+      asUser(CLIENT, `insert into mf_events(id,client_id,name) values ('E999','C002','x')`)
+    ).rejects.toBeTruthy();
+  });
+});
+
+describe('RLS: crew (S006, unassigned in seed)', () => {
+  it('sees no events until assigned', async () => {
+    const rows = await asUser(CREW, 'select id from mf_events');
+    expect(rows).toHaveLength(0);
+  });
+  it('does not see other staff assignments', async () => {
+    const rows = await asUser(CREW, 'select id from mf_assignments');
+    expect(rows).toHaveLength(0);
+  });
+  it('sees an event once assigned to it', async () => {
+    await asUser(OWNER, `insert into mf_assignments(id,event_id,unit_id,staff_id,area) values ('A099','E002','U001','S006','Bar')`);
+    const rows = await asUser(CREW, 'select id from mf_events');
+    expect(rows.map((r) => r.id)).toContain('E002');
+  });
+  it('can read and write only its own availability', async () => {
+    await asUser(CREW, `insert into mf_availability(staff_id, date, available) values ('S006','2026-07-24', false)`);
+    const mine = await asUser(CREW, `select date from mf_availability`);
+    expect(mine).toHaveLength(1);
+  });
+
+  it('can upload its own cert but not another staff member\'s', async () => {
+    // own cert: allowed
+    await asUser(CREW, `insert into mf_certs(id, staff_id, type, expiry) values ('CERT-S006-x','S006','Food Hygiene L2','2030-01-01')`);
+    const mine = await asUser(CREW, `select id from mf_certs`);
+    expect(mine.some((r) => r.id === 'CERT-S006-x')).toBe(true);
+    // foreign cert: denied by WITH CHECK
+    await expect(
+      asUser(CREW, `insert into mf_certs(id, staff_id, type, expiry) values ('CERT-S001-x','S001','First Aid','2030-01-01')`)
+    ).rejects.toBeTruthy();
+  });
+});

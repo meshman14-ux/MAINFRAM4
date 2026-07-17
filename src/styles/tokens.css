@@ -1,0 +1,90 @@
+/* ============================================================
+   MAINFRAME — design tokens
+   Matched to the existing prototype look (Home / Ops Console
+   screenshots): near-black canvas, cool slate panels, monospace
+   eyebrows, per-status accent colours, coloured KPI numerals.
+   ============================================================ */
+
+:root {
+  /* --- surfaces --- */
+  --bg:        #05070a;   /* app canvas — near-black with a cool cast */
+  --bg-grad-1: #0a1420;   /* subtle top-left glow used on hero areas */
+  --panel:     #0d1219;   /* card background */
+  --panel-2:   #111823;   /* raised / hover card */
+  --panel-line:#1c2634;   /* hairline borders */
+  --inset:     #0a0e14;   /* inset wells (rows inside cards) */
+
+  /* --- text --- */
+  --ink:       #eef2f7;   /* primary text */
+  --ink-2:     #9aa7b8;   /* secondary text */
+  --ink-3:     #5f6d7e;   /* muted / captions */
+
+  /* --- accents (status + areas) --- */
+  --blue:   oklch(0.72 0.19 250);
+  --green:  oklch(0.74 0.21 150);
+  --amber:  oklch(0.78 0.16 70);
+  --violet: oklch(0.66 0.24 300);
+  --pink:   oklch(0.72 0.22 350);
+  --cyan:   oklch(0.78 0.13 200);
+  --red:    oklch(0.66 0.24 20);
+
+  /* semantic */
+  --accent:      var(--blue);
+  --ok:          var(--green);
+  --warn:        var(--amber);
+  --danger:      var(--red);
+
+  /* --- type --- */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body:    'Inter', system-ui, sans-serif;
+  --font-mono:    'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* --- geometry --- */
+  --r-lg: 16px;
+  --r-md: 12px;
+  --r-sm: 8px;
+  --gap:  16px;
+  --pad:  20px;
+
+  --maxw: 1360px;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1200px 600px at 15% -10%, var(--bg-grad-1), transparent 60%),
+    var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* eyebrow / section kicker — monospace, tracked out, like the screenshots */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.mono { font-family: var(--font-mono); }
+
+a { color: inherit; }
+
+/* focus visibility — accessibility floor */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}

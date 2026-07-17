@@ -1,0 +1,89 @@
+/* ============================================================
+   Phase 4 — Events Register, Calendar, Staff Hub
+   ============================================================ */
+
+.p4 { max-width: var(--maxw); margin: 0 auto; padding: 24px; }
+
+/* segmented scope filter */
+.segmented { display: inline-flex; gap: 2px; background: var(--inset); border: 1px solid var(--panel-line); border-radius: var(--r-sm); padding: 3px; }
+.segmented button { font: inherit; font-size: 13px; cursor: pointer; border: none; background: none; color: var(--ink-3); padding: 6px 12px; border-radius: 6px; }
+.segmented button[aria-pressed="true"] { background: var(--panel-2); color: var(--ink); }
+
+/* register list (richer than the home mini-list) */
+.reg-row {
+  display: grid; grid-template-columns: 6px 1.4fr 1fr auto; gap: 16px; align-items: center;
+  padding: 16px; border-radius: var(--r-md);
+  background: var(--panel); border: 1px solid var(--panel-line);
+  text-decoration: none; color: inherit;
+}
+.reg-row + .reg-row { margin-top: 10px; }
+.reg-row:hover { background: var(--panel-2); }
+.reg-accent { width: 6px; align-self: stretch; border-radius: 4px; background: var(--evc); min-height: 44px; }
+.reg-main .nm { font-family: var(--font-display); font-weight: 600; font-size: 17px; }
+.reg-main .sub { color: var(--ink-3); font-size: 13px; margin-top: 3px; }
+.reg-stats { display: flex; gap: 22px; font-size: 13px; }
+.reg-stats .k { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); display: block; margin-bottom: 2px; }
+.reg-badge { justify-self: end; font-family: var(--font-mono); font-size: 12px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--panel-line); color: var(--ink-2); }
+.reg-badge[data-status="live"] { color: var(--green); border-color: color-mix(in oklab, var(--green) 45%, var(--panel-line)); }
+.reg-badge[data-status="past"] { color: var(--ink-3); }
+
+/* calendar */
+.cal-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+.cal-title { font-family: var(--font-display); font-size: 20px; font-weight: 600; min-width: 220px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cal-dow { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); text-align: center; padding: 6px 0; }
+.cal-cell {
+  min-height: 96px; border-radius: var(--r-sm); padding: 8px;
+  background: var(--panel); border: 1px solid var(--panel-line);
+}
+.cal-cell[data-inmonth="false"] { opacity: 0.4; }
+.cal-cell[data-today="true"] { border-color: var(--accent); }
+.cal-daynum { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); margin-bottom: 6px; }
+.cal-ev {
+  display: block; font-size: 11.5px; padding: 3px 6px; border-radius: 5px; margin-bottom: 4px;
+  color: var(--ink); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border-left: 3px solid var(--evc); background: color-mix(in oklab, var(--evc) 12%, var(--panel));
+}
+.cal-ev:hover { background: color-mix(in oklab, var(--evc) 22%, var(--panel)); }
+
+/* staff hub */
+.hub-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--gap); align-items: start; }
+.shift-card {
+  display: grid; grid-template-columns: 6px 1fr auto; gap: 14px; align-items: center;
+  padding: 14px 16px; border-radius: var(--r-md); background: var(--inset); border: 1px solid var(--panel-line);
+}
+.shift-card + .shift-card { margin-top: 10px; }
+.shift-accent { width: 6px; align-self: stretch; border-radius: 4px; background: var(--evc); min-height: 40px; }
+.shift-main .nm { font-family: var(--font-display); font-weight: 600; font-size: 15px; }
+.shift-main .sub { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-3); margin-top: 3px; }
+.shift-actions { display: flex; gap: 8px; }
+.btn-confirm { color: var(--green); border-color: color-mix(in oklab, var(--green) 45%, var(--panel-line)); background: color-mix(in oklab, var(--green) 8%, var(--panel)); }
+.btn-decline { color: var(--red); border-color: color-mix(in oklab, var(--danger) 45%, var(--panel-line)); background: transparent; }
+
+.cert-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--panel-line); }
+.cert-row:first-of-type { border-top: none; }
+.cert-state { font-family: var(--font-mono); font-size: 11px; padding: 3px 8px; border-radius: 999px; }
+.cert-state[data-s="ok"] { color: var(--green); }
+.cert-state[data-s="expiring"] { color: var(--amber); }
+.cert-state[data-s="expired"], .cert-state[data-s="missing"] { color: var(--red); }
+
+/* availability mini-calendar */
+.avail-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 10px; }
+.avail-day {
+  aspect-ratio: 1; border-radius: 6px; border: 1px solid var(--panel-line);
+  background: var(--panel); font-family: var(--font-mono); font-size: 11px;
+  color: var(--ink-2); cursor: pointer; display: grid; place-items: center;
+}
+.avail-day[data-off="true"] { background: color-mix(in oklab, var(--red) 20%, var(--panel)); border-color: color-mix(in oklab, var(--danger) 45%, var(--panel-line)); color: var(--ink); }
+.avail-day[data-out="true"] { opacity: 0.3; cursor: default; }
+.avail-day:hover:not([data-out="true"]) { border-color: var(--ink-3); }
+
+@media (max-width: 1000px) {
+  .hub-grid { grid-template-columns: 1fr; }
+  .cal-cell { min-height: 72px; }
+}
+@media (max-width: 680px) {
+  .reg-row { grid-template-columns: 6px 1fr; }
+  .reg-stats, .reg-badge { display: none; }
+  .cal-ev { font-size: 0; padding: 3px; }  /* dots only on tiny screens */
+}

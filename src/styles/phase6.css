@@ -1,0 +1,35 @@
+/* ============================================================
+   Phase 6 — Compliance register, Stock ordering, Finance
+   ============================================================ */
+
+/* summary stat strip (shared) */
+.stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 20px; }
+.stat-box { background: var(--panel); border: 1px solid var(--panel-line); border-radius: var(--r-md); padding: 14px 16px; }
+.stat-box .v { font-family: var(--font-display); font-size: 24px; font-weight: 600; }
+.stat-box .k { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin-top: 2px; }
+.stat-box[data-tone="green"] .v { color: var(--green); }
+.stat-box[data-tone="amber"] .v { color: var(--amber); }
+.stat-box[data-tone="red"] .v { color: var(--red); }
+
+/* warning banner (double-bookings) */
+.warn-banner { background: color-mix(in oklab, var(--danger) 12%, var(--panel)); border: 1px solid color-mix(in oklab, var(--danger) 45%, var(--panel-line)); border-radius: var(--r-md); padding: 14px 16px; margin-bottom: 18px; }
+.warn-banner .wt { font-family: var(--font-display); font-weight: 600; color: var(--red); margin-bottom: 8px; }
+.warn-item { font-size: 13.5px; color: var(--ink-2); padding: 3px 0; }
+
+/* compliance rows */
+.comp-row { display: grid; grid-template-columns: 1.2fr 1fr 1.6fr auto; gap: 14px; align-items: center; padding: 13px 14px; border-radius: var(--r-sm); background: var(--panel); border: 1px solid var(--panel-line); }
+.comp-row + .comp-row { margin-top: 8px; }
+.comp-name { font-weight: 500; }
+.comp-role { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+.comp-issues { font-size: 12.5px; color: var(--ink-3); }
+.comp-issues .bad { color: var(--red); }
+.comp-issues .warn { color: var(--amber); }
+
+/* finance table */
+.fin-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.fin-table th { text-align: left; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); padding: 8px 12px; border-bottom: 1px solid var(--panel-line); font-weight: 500; }
+.fin-table td { padding: 12px; border-bottom: 1px solid var(--panel-line); }
+.fin-table .num { font-family: var(--font-mono); text-align: right; }
+.fin-table tfoot td { font-weight: 600; border-top: 2px solid var(--panel-line); border-bottom: none; }
+.fin-total { font-family: var(--font-display); }
+.fin-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 8px; }

@@ -1,0 +1,41 @@
+/* ============================================================
+   Phase 7 — Client Portal (read-only, reassuring)
+   ============================================================ */
+
+.portal-hero { margin-bottom: 24px; }
+.portal-hero h1 { font-family: var(--font-display); font-size: 26px; font-weight: 600; margin: 0 0 6px; }
+.portal-hero p { color: var(--ink-3); font-size: 15px; margin: 0; }
+
+.portal-next {
+  background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 14%, var(--panel)), var(--panel));
+  border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--panel-line));
+  border-radius: var(--r-lg); padding: 22px; margin-bottom: 24px;
+}
+.portal-next .eyebrow { margin-bottom: 8px; }
+.portal-next .ne-name { font-family: var(--font-display); font-size: 22px; font-weight: 600; }
+.portal-next .ne-meta { color: var(--ink-2); font-size: 14px; margin-top: 4px; }
+.portal-next .ne-count { font-family: var(--font-mono); font-size: 13px; color: var(--accent); margin-top: 10px; }
+
+.portal-card {
+  display: grid; grid-template-columns: 6px 1fr; gap: 18px;
+  background: var(--panel); border: 1px solid var(--panel-line);
+  border-radius: var(--r-md); padding: 20px; margin-bottom: 14px;
+}
+.portal-accent { border-radius: 4px; background: var(--evc); }
+.portal-card .pc-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.portal-card .pc-name { font-family: var(--font-display); font-size: 18px; font-weight: 600; }
+.portal-card .pc-loc { color: var(--ink-3); font-size: 13px; }
+.portal-card .pc-count { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); }
+
+.portal-meters { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.meter .ml { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-2); margin-bottom: 6px; }
+.meter .mbar { height: 8px; border-radius: 999px; background: var(--inset); overflow: hidden; }
+.meter .mfill { height: 100%; border-radius: 999px; transition: width 0.3s; }
+
+.portal-status { font-family: var(--font-mono); font-size: 11px; padding: 3px 9px; border-radius: 999px; }
+.portal-status[data-ready="true"] { color: var(--green); border: 1px solid color-mix(in oklab, var(--green) 45%, var(--panel-line)); }
+.portal-status[data-ready="false"] { color: var(--ink-3); border: 1px solid var(--panel-line); }
+
+@media (max-width: 640px) {
+  .portal-meters { grid-template-columns: 1fr; }
+}
