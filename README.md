@@ -203,9 +203,126 @@ The schema and data layer were aligned to the engineering blueprint:
 - [x] **Phase 5** — Callouts & Open Jobs + Onboarding wizard + Readiness screen
 - [x] **Phase 6** — Compliance register + Stock ordering + Finance
 - [x] **Phase 7** — Client Portal + deployment scaffolding
+- [x] **Phase 8** — Sales Pipeline (CRM), first of the operational features
+      ported from the original prototype library
+- [x] **Phase 9** — Logistics (vehicle & driver movements), second of the
+      operational features
 
-**All seven phases from the blueprint are built.** See `DEPLOY.md` for going live
-and `LAUNCH_CHECKLIST.md` for the real-users pre-flight.
+**All seven blueprint phases plus Phases 8–9 are built.** See `DEPLOY.md` for
+going live and `LAUNCH_CHECKLIST.md` for the real-users pre-flight. New work
+after go-live ships as additive migrations (see `05_pipeline.sql`,
+`06_logistics.sql`) so a live database never needs to be rebuilt.
+
+### Banked for later (from user feedback, not yet built)
+
+A round of handwritten feedback covered UI polish across Compliance, Home,
+Console, Callouts, Calendar and Events, plus three larger asks, scoped but
+deliberately deferred until after the operational-features batch:
+- A **per-event task module** (not a personal to-do list — tasks tied to
+  specific events, closer to a generalised version of the existing unit
+  checklist / event-readiness steps).
+- **PWA installability** so the web app can be added to an Android home
+  screen (a manifest + service worker — much smaller than a native app).
+- A **detailed new-client onboarding flow** with a full diagnostic and
+  checklist, surfaced on the Home page.
+
+---
+
+## Phase 9 — Logistics (built)
+
+Ported from the original `Logistics.dc.html` prototype: vehicle and driver
+movement planning per event.
+
+- **Per-event movement planning** (`#/logistics`, operator-only) — plan a
+  movement (unit/trailer or "support van, no trailer" + driver + depart
+  date/time), cycle its status forward through
+  `planned → en-route → on-site → returned`, and remove it. A summary strip
+  shows total movements, how many are en-route right now, and how many
+  tow-capable drivers the operator has. `src/pages/Logistics.tsx`.
+- **Driver clash detection reuses Phase 6's `eventsOverlap()` directly** —
+  the driver pool for an event flags anyone already on a movement for a
+  *different, date-overlapping* event (e.g. "⚠ Camp Bestival"), the same
+  double-booking concept the Compliance register already surfaces for crew
+  assignments, applied here to drivers.
+- **Tow-capability warning** — selecting a real towed unit with a driver who
+  isn't marked `canTow` shows a warning ("needs a tow-qualified driver, or
+  send them in the support van") without blocking the plan, matching the
+  prototype's own soft-warn behaviour.
+- **Adapted for real multi-tenancy** — the original prototype showed every
+  client's events on one shared screen (it had no per-operator isolation).
+  This build scopes Logistics to one operator at a time via the same
+  client-selector pattern as Compliance/Finance/Stock, which is how the rest
+  of this multi-tenant app already works — a deliberate improvement, not a
+  faithful port of that part.
+- **Operator-only by design** — `mf_movements` is RLS-restricted like
+  `mf_pipeline`; crew and clients cannot see vehicle/driver planning.
+  Proven with 3 dedicated RLS tests against real Postgres.
+
+---
+
+## Phase 8 — Sales Pipeline (built)
+
+Ported from the original `Pipeline.dc.html` prototype (found in a fuller
+export of the original design library, uploaded after go-live). Rather than
+a separate system, this is the next slice of already-designed functionality
+that didn't make the first seven phases.
+
+- **Kanban board** (`#/pipeline`, operator-only) — six stages:
+  `lead → contacted → diagnostic → proposal → won`, plus a `lost` side-branch
+  reachable from (and returning to) any stage. Add a lead by name, edit a deal
+  value and next-step note inline per card, move a card forward/back with the
+  arrow buttons, mark it lost or reopen it, and — the connective bit — **book
+  a job straight from a card**, which resolves-or-creates the client and
+  creates the event for real, exactly like the Onboarding wizard does.
+  `src/pages/Pipeline.tsx`.
+- **Two deliberate improvements over the original prototype**, both called
+  out explicitly rather than silently changed:
+  1. Reopening a lost lead now restores its *exact* prior stage. The
+     original always reset to a fixed stage depending on which button was
+     clicked — a real inconsistency in the source, not a design choice worth
+     preserving.
+  2. Booking a job now auto-advances the matching pipeline card to "won".
+     The original left this as a separate manual drag, which is an easy step
+     to forget. Pass `{ advanceToWon: false }` to `bookJob()` to disable this
+     and match the prototype exactly.
+- **Deliberately deferred**: the original prototype's lead-scoring (an
+  "ops maturity" score from a linked Client Diagnostic tool) is not built —
+  that lives in a separate advisory/consultancy layer that scores *other*
+  businesses, which is out of scope for this pass. Leads move through every
+  stage ungraded; the schema (`mf_pipeline`) has room to add scoring later
+  without a migration.
+- **Confidential by design** — `mf_pipeline` is RLS-restricted to
+  owner/manager only. Crew and clients cannot see the sales pipeline exists,
+  proven with 4 dedicated RLS tests against real Postgres.
+
+### New migration — additive, safe on a live database
+
+`supabase/05_pipeline.sql` adds the `mf_pipeline` table, its RLS policy, and
+realtime — nothing else. It does **not** touch `01`–`03`. On an already-live
+project: **paste this one file into the Supabase SQL Editor and Run**, then
+push the updated code so Vercel redeploys. No downtime, no re-running earlier
+migrations.
+
+---
+
+## Test summary
+
+```
+tests/parity.test.ts       14  derived logic == opsdeck-data.js (exact scores)
+tests/home.test.ts         12  Home KPIs/feed match the screenshot
+tests/algorithms.test.ts   10  blueprint §03 algorithms
+tests/console.test.ts       9  console flows + save-merge + echo suppression
+tests/phase4.test.ts       10  register / calendar / staff-hub selectors
+tests/phase5.test.ts       10  callouts / apply→approve→assign / onboarding / readiness
+tests/phase6.test.ts        9  compliance / double-booking / reorder / finance
+tests/portal.test.ts        4  client portal: own-events isolation + progress
+tests/pipeline.test.ts     16  CRM stages, lost/reopen, book-job, summary math
+tests/logistics.test.ts    12  movements, status cycling, driver clash detection
+tests/routing.test.ts      13  role landing + route guarding + pipeline/logistics/portal access
+tests/rls.test.ts          18  RLS scope + crew self-service + JWT seam + pipeline/logistics lock (real Postgres)
+                           ---
+                          137  all passing
+```
 
 ---
 
@@ -261,23 +378,6 @@ Anthropic can't click "deploy" for you — this needs your own Supabase and Verc
 accounts — but everything required is in the repo and the build is verified.
 
 ---
-
-## Test summary
-
-```
-tests/parity.test.ts       14  derived logic == opsdeck-data.js (exact scores)
-tests/home.test.ts         12  Home KPIs/feed match the screenshot
-tests/algorithms.test.ts   10  blueprint §03 algorithms
-tests/console.test.ts       9  console flows + save-merge + echo suppression
-tests/phase4.test.ts       10  register / calendar / staff-hub selectors
-tests/phase5.test.ts       10  callouts / apply→approve→assign / onboarding / readiness
-tests/phase6.test.ts        9  compliance / double-booking / reorder / finance
-tests/portal.test.ts        4  client portal: own-events isolation + progress
-tests/routing.test.ts      12  role landing + route guarding + portal access
-tests/rls.test.ts          11  RLS scope + crew self-service + JWT seam (real Postgres)
-                           ---
-                          100  all passing
-```
 
 ---
 

@@ -11,6 +11,8 @@ import Readiness from './pages/Readiness';
 import Compliance from './pages/Compliance';
 import StockOrdering from './pages/StockOrdering';
 import Finance from './pages/Finance';
+import Pipeline from './pages/Pipeline';
+import Logistics from './pages/Logistics';
 import ClientPortal from './pages/ClientPortal';
 import Login from './pages/Login';
 import SetNewPassword from './pages/SetNewPassword';
@@ -22,6 +24,8 @@ import './styles/console.css';
 import './styles/phase4.css';
 import './styles/phase5.css';
 import './styles/phase6.css';
+import './styles/pipeline.css';
+import './styles/logistics.css';
 import './styles/portal.css';
 import './styles/auth.css';
 
@@ -48,6 +52,8 @@ const ROUTES: Record<string, RouteDef> = {
   compliance:{ page: 'Compliance', el: <Compliance />,  roles: ['owner', 'manager'] },
   stock:    { page: 'Stock',     el: <StockOrdering />, roles: ['owner', 'manager'] },
   finance:  { page: 'Finance',   el: <Finance />,       roles: ['owner', 'manager'] },
+  pipeline: { page: 'Pipeline',  el: <Pipeline />,      roles: ['owner', 'manager'] },
+  logistics:{ page: 'Logistics', el: <Logistics />,     roles: ['owner', 'manager'] },
   portal:   { page: 'My Events', el: <ClientPortal />,  roles: ['client'] },
   events:   { page: 'Events',    el: <EventsRegister />, roles: ['owner', 'manager', 'client'] },
   calendar: { page: 'Calendar',  el: <Calendar />,      roles: ['owner', 'manager', 'client'] },

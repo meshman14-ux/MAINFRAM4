@@ -7,6 +7,8 @@ type Role = 'owner' | 'manager' | 'crew' | 'client';
 const ROUTES: Record<string, Role[]> = {
   home: ['owner', 'manager'],
   console: ['owner', 'manager'],
+  pipeline: ['owner', 'manager'],
+  logistics: ['owner', 'manager'],
   callouts: ['owner', 'manager'],
   onboard: ['owner', 'manager'],
   readiness: ['owner', 'manager'],
@@ -66,6 +68,14 @@ describe('route guarding', () => {
       expect(canReach('crew', r)).toBe(false);
       expect(canReach('client', r)).toBe(false);
     }
+  });
+  it('crew and clients cannot reach the Pipeline (confidential CRM)', () => {
+    expect(canReach('crew', 'pipeline')).toBe(false);
+    expect(canReach('client', 'pipeline')).toBe(false);
+  });
+  it('crew and clients cannot reach Logistics (internal ops planning)', () => {
+    expect(canReach('crew', 'logistics')).toBe(false);
+    expect(canReach('client', 'logistics')).toBe(false);
   });
   it('crew can reach Staff Hub', () => expect(canReach('crew', 'staff')).toBe(true));
   it('clients can reach Events + Calendar but not Console or Staff Hub', () => {

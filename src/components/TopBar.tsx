@@ -7,6 +7,7 @@ const PRIMARY: { label: string; route: string; roles: Role[] }[] = [
   { label: 'Home',      route: '#/',          roles: ['owner', 'manager'] },
   { label: 'My Events', route: '#/portal',    roles: ['client'] },
   { label: 'Console',   route: '#/console',   roles: ['owner', 'manager'] },
+  { label: 'Pipeline',  route: '#/pipeline',  roles: ['owner', 'manager'] },
   { label: 'Callouts',  route: '#/callouts',  roles: ['owner', 'manager'] },
   { label: 'Events',    route: '#/events',    roles: ['owner', 'manager', 'client'] },
   { label: 'Calendar',  route: '#/calendar',  roles: ['owner', 'manager', 'client'] },
@@ -17,6 +18,7 @@ const MORE: { label: string; route: string; roles: Role[] }[] = [
   { label: 'Compliance', route: '#/compliance', roles: ['owner', 'manager'] },
   { label: 'Stock',      route: '#/stock',      roles: ['owner', 'manager'] },
   { label: 'Finance',    route: '#/finance',    roles: ['owner', 'manager'] },
+  { label: 'Logistics',  route: '#/logistics',  roles: ['owner', 'manager'] },
   { label: 'Onboard',    route: '#/onboard',    roles: ['owner', 'manager'] },
 ];
 

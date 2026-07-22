@@ -1,0 +1,43 @@
+/* ============================================================
+   Phase 8 — Sales Pipeline (CRM)
+   ============================================================ */
+
+.pipe-board { display: grid; grid-template-columns: repeat(6, minmax(220px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 8px; }
+.pipe-col { background: var(--panel); border: 1px solid var(--panel-line); border-radius: var(--r-md); padding: 12px; min-width: 220px; }
+.pipe-col-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.pipe-col-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--stagec); flex-shrink: 0; }
+.pipe-col-label { font-family: var(--font-display); font-weight: 600; font-size: 13.5px; }
+.pipe-col-count { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); margin-left: auto; }
+.pipe-col-value { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); display: block; margin-bottom: 8px; }
+
+.pipe-card { background: var(--inset); border: 1px solid var(--panel-line); border-radius: var(--r-sm); padding: 10px; }
+.pipe-card + .pipe-card { margin-top: 8px; }
+.pipe-card .pc-top { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.pipe-card .pc-name { font-size: 13.5px; font-weight: 500; flex: 1; }
+.pipe-card .pc-score { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+.pipe-card input.pc-value, .pipe-card input.pc-next {
+  width: 100%; font: inherit; font-size: 12.5px; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--panel-line); border-radius: 5px;
+  padding: 5px 7px; margin-top: 5px;
+}
+.pipe-card-actions { display: flex; align-items: center; gap: 4px; margin-top: 8px; }
+.pipe-arrow {
+  width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--panel-line);
+  background: var(--panel); color: var(--ink-2); font-size: 13px; cursor: pointer;
+  display: grid; place-items: center; padding: 0;
+}
+.pipe-arrow:disabled { color: var(--ink-3); opacity: 0.4; cursor: default; }
+.pipe-arrow.danger { color: var(--red); margin-left: auto; }
+.pipe-arrow.job { color: var(--green); }
+.pipe-empty-col { color: var(--ink-3); font-size: 12px; text-align: center; padding: 14px 4px; border: 1px dashed var(--panel-line); border-radius: var(--r-sm); }
+
+/* add-lead + summary bar */
+.pipe-toolbar { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+.pipe-add { display: flex; gap: 8px; }
+.pipe-add input { width: 220px; }
+.pipe-stats { display: flex; gap: 22px; margin-left: auto; font-size: 13px; }
+.pipe-stats .k { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); display: block; margin-bottom: 2px; }
+
+@media (max-width: 900px) {
+  .pipe-board { grid-template-columns: repeat(6, 220px); }
+}

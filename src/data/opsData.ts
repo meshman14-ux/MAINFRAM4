@@ -20,10 +20,11 @@
 import { supabase } from '../lib/supabase';
 import { DB_TABLE, fromRow, toRow } from './mappers';
 import type {
-  OpsState, TableName, EventRec, Unit, Staff,
+  OpsState, TableName, EventRec, Unit, Staff, Client,
   Assignment, StockLine, Application, Area, Compliance, Candidate,
-  Cert, AvailabilityDay,
+  Cert, AvailabilityDay, PipelineEntry, PipelineStage, Movement,
 } from './types';
+import { PIPELINE_FUNNEL, MOVEMENT_STATUSES } from './types';
 
 type Row = Record<string, any>;
 type Sub = () => void;
@@ -101,6 +102,30 @@ export class OpsData {
     });
     this.db.availability = availability;
 
+    // pipeline — Phase 8 sales CRM, operator-only (empty result for non-operators is fine)
+    const { data: pipeRows } = await supabase.from('mf_pipeline').select('*');
+    const pipeline: Record<string, any> = {};
+    (pipeRows ?? []).forEach((r: Row) => {
+      pipeline[r.id] = {
+        id: r.id, name: r.name, clientId: r.client_id ?? undefined,
+        stage: r.stage, priorStage: r.prior_stage ?? undefined,
+        value: r.value != null ? Number(r.value) : undefined, nextStep: r.next_step ?? undefined,
+      };
+    });
+    this.db.pipeline = pipeline;
+
+    // movements — Phase 9 logistics, operator-only
+    const { data: moveRows } = await supabase.from('mf_movements').select('*');
+    const movements: Record<string, any> = {};
+    (moveRows ?? []).forEach((r: Row) => {
+      movements[r.id] = {
+        id: r.id, eventId: r.event_id, unitId: r.unit_id ?? undefined, driverId: r.driver_id,
+        departDate: r.depart_date ?? undefined, departTime: r.depart_time ?? undefined,
+        tow: !!r.tow, status: r.status,
+      };
+    });
+    this.db.movements = movements;
+
     this.ready = true;
     this.subscribeRealtime();
     this.emit();
@@ -135,8 +160,54 @@ export class OpsData {
         (payload: any) => this.applyRealtime(t, payload)
       );
     });
+    // mf_pipeline is outside the generic TableName set (operator-only, own
+    // methods) — same echo-suppression / merge path, routed by hand.
+    ch.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'mf_pipeline' },
+      (payload: any) => this.applyPipelineRealtime(payload)
+    );
+    ch.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'mf_movements' },
+      (payload: any) => this.applyMovementRealtime(payload)
+    );
     ch.subscribe();
     this.channel = ch;
+  }
+
+  private applyMovementRealtime(payload: any): void {
+    if (payload.eventType === 'DELETE') {
+      const id = payload.old?.id;
+      if (id) delete this.db.movements[id];
+    } else {
+      const r = payload.new;
+      if (!r?.id) return;
+      if (this.isOwnEcho('movements' as any, r.id)) return;
+      this.db.movements[r.id] = {
+        id: r.id, eventId: r.event_id, unitId: r.unit_id ?? undefined, driverId: r.driver_id,
+        departDate: r.depart_date ?? undefined, departTime: r.depart_time ?? undefined,
+        tow: !!r.tow, status: r.status,
+      };
+    }
+    this.emit();
+  }
+
+  private applyPipelineRealtime(payload: any): void {
+    if (payload.eventType === 'DELETE') {
+      const id = payload.old?.id;
+      if (id) delete this.db.pipeline[id];
+    } else {
+      const r = payload.new;
+      if (!r?.id) return;
+      if (this.isOwnEcho('pipeline' as any, r.id)) return;
+      this.db.pipeline[r.id] = {
+        id: r.id, name: r.name, clientId: r.client_id ?? undefined,
+        stage: r.stage, priorStage: r.prior_stage ?? undefined,
+        value: r.value != null ? Number(r.value) : undefined, nextStep: r.next_step ?? undefined,
+      };
+    }
+    this.emit();
   }
 
   private applyRealtime(t: TableName, payload: any): void {
@@ -568,6 +639,235 @@ export class OpsData {
   }
 
   /* ============================================================
+     PIPELINE — sales CRM (Phase 8, ported from Pipeline.dc.html)
+     Operator-only (RLS-restricted); crew and clients never see this.
+     Stages: lead -> contacted -> diagnostic -> proposal -> won,
+     plus a 'lost' side-branch reachable from (and returning to) any
+     stage. Deliberately does not require the Client Diagnostic tool
+     (deferred) — a lead moves through every stage ungraded.
+     ============================================================ */
+
+  pipelineEntries(): PipelineEntry[] {
+    return Object.values(this.db.pipeline);
+  }
+
+  private async savePipelineRow(entry: Partial<PipelineEntry> & { id?: string }): Promise<PipelineEntry> {
+    const id = entry.id || this.uid('pipeline' as any);
+    const bucket = this.db.pipeline;
+    const merged = Object.assign({}, bucket[id], entry, { id }) as PipelineEntry;
+    bucket[id] = merged;
+    this.markLocalWrite('pipeline' as any, id);
+    this.emit();
+    const row = {
+      id: merged.id, name: merged.name, client_id: merged.clientId ?? null,
+      stage: merged.stage, prior_stage: merged.priorStage ?? null,
+      value: merged.value ?? null, next_step: merged.nextStep ?? null,
+    };
+    const { error } = await supabase.from('mf_pipeline').upsert(row);
+    if (error) throw new Error(`pipeline save: ${error.message}`);
+    return merged;
+  }
+
+  /**
+   * Add a new lead. Case-insensitive dedupe against existing pipeline
+   * entries — adding a name that's already tracked is a no-op (matches
+   * the prototype's allNames()-based guard).
+   */
+  async addLead(name: string): Promise<PipelineEntry | null> {
+    const clean = name.trim();
+    if (!clean) return null;
+    const key = clean.toLowerCase();
+    const exists = this.pipelineEntries().some((e) => e.name.trim().toLowerCase() === key);
+    if (exists) return null;
+    return this.savePipelineRow({ name: clean, stage: 'lead' });
+  }
+
+  /**
+   * Move a lead forward/back through the funnel (dir = 1 or -1). A no-op
+   * while the entry is 'lost' — use reopenLead() to bring it back first,
+   * which is clearer than the prototype's quirky arrow-reopens-to-proposal
+   * behaviour.
+   */
+  async moveStage(id: string, dir: 1 | -1): Promise<void> {
+    const e = this.db.pipeline[id];
+    if (!e || e.stage === 'lost') return;
+    const i = PIPELINE_FUNNEL.indexOf(e.stage);
+    const next = PIPELINE_FUNNEL[Math.max(0, Math.min(PIPELINE_FUNNEL.length - 1, i + dir))];
+    await this.savePipelineRow({ id, stage: next });
+  }
+
+  /**
+   * Mark a lead lost (remembering its stage) or reopen it back to exactly
+   * where it was. This is a deliberate improvement on the prototype, which
+   * always reopened to a fixed stage rather than remembering the real one.
+   */
+  async toggleLost(id: string): Promise<void> {
+    const e = this.db.pipeline[id];
+    if (!e) return;
+    if (e.stage === 'lost') {
+      await this.savePipelineRow({ id, stage: e.priorStage || 'lead', priorStage: undefined });
+    } else {
+      await this.savePipelineRow({ id, stage: 'lost', priorStage: e.stage });
+    }
+  }
+
+  async updatePipelineValue(id: string, value: number | undefined): Promise<void> {
+    await this.savePipelineRow({ id, value });
+  }
+
+  async updatePipelineNextStep(id: string, nextStep: string): Promise<void> {
+    await this.savePipelineRow({ id, nextStep });
+  }
+
+  async removePipelineEntry(id: string): Promise<void> {
+    delete this.db.pipeline[id];
+    this.markLocalWrite('pipeline' as any, id);
+    this.emit();
+    const { error } = await supabase.from('mf_pipeline').delete().eq('id', id);
+    if (error) throw new Error(`pipeline remove: ${error.message}`);
+  }
+
+  /**
+   * Book a job for a prospect: resolve-or-create the client by name
+   * (case-insensitive, mirrors the prototype's resolveClient), create the
+   * event, and — if a pipeline entry exists for this name — link it to the
+   * new client and move it to 'won'. The prototype left the stage untouched
+   * on booking (a real gap: someone could book a job and forget to drag the
+   * card); auto-advancing to 'won' here closes that gap. Disable by passing
+   * advanceToWon:false if you'd rather match the prototype exactly.
+   */
+  async bookJob(
+    clientName: string,
+    event: { name: string; loc?: string; start: string; end?: string; callTime?: string; notes?: string },
+    opts: { advanceToWon?: boolean } = {}
+  ): Promise<{ client: Client; event: EventRec }> {
+    const key = clientName.trim().toLowerCase();
+    const existing = this.all<Client>('clients').find((c) => c.name.trim().toLowerCase() === key) || null;
+    const client: Client = existing
+      ?? (await this.save<Partial<Client>>('clients', { name: clientName.trim(), status: 'Active' }) as Client);
+    const saved = await this.save<Partial<EventRec>>('events', {
+      clientId: client.id, name: event.name.trim(), loc: event.loc?.trim(),
+      start: event.start, end: event.end || event.start, callTime: event.callTime, notes: event.notes?.trim(),
+    });
+
+    const advance = opts.advanceToWon !== false;
+    if (advance) {
+      const match = this.pipelineEntries().find((e) => e.name.trim().toLowerCase() === key);
+      if (match) await this.savePipelineRow({ id: match.id, clientId: client.id, stage: 'won' });
+    }
+    return { client, event: saved as EventRec };
+  }
+
+  /** Summary stats for the pipeline board: open value, won value, win rate. */
+  pipelineSummary(): { openValue: number; wonValue: number; winRatePct: number | null } {
+    const entries = this.pipelineEntries();
+    const openStages: PipelineStage[] = ['lead', 'contacted', 'diagnostic', 'proposal'];
+    const openValue = entries.filter((e) => openStages.includes(e.stage)).reduce((s, e) => s + (e.value || 0), 0);
+    const wonValue = entries.filter((e) => e.stage === 'won').reduce((s, e) => s + (e.value || 0), 0);
+    const won = entries.filter((e) => e.stage === 'won').length;
+    const lost = entries.filter((e) => e.stage === 'lost').length;
+    const closed = won + lost;
+    return { openValue, wonValue, winRatePct: closed ? Math.round((won / closed) * 100) : null };
+  }
+
+  /* ============================================================
+     LOGISTICS — vehicle & driver movements (Phase 9, ported from
+     Logistics.dc.html). Operator-only. Reuses eventsOverlap() from
+     the Phase 6 double-booking work for driver clash detection.
+     ============================================================ */
+
+  movementsForEvent(eventId: string): Movement[] {
+    return Object.values(this.db.movements).filter((m) => m.eventId === eventId);
+  }
+
+  private async saveMovementRow(m: Partial<Movement> & { id?: string }): Promise<Movement> {
+    const id = m.id || this.uid('movements' as any);
+    const bucket = this.db.movements;
+    const merged = Object.assign({}, bucket[id], m, { id }) as Movement;
+    bucket[id] = merged;
+    this.markLocalWrite('movements' as any, id);
+    this.emit();
+    const row = {
+      id: merged.id, event_id: merged.eventId, unit_id: merged.unitId ?? null,
+      driver_id: merged.driverId, depart_date: merged.departDate ?? null,
+      depart_time: merged.departTime ?? null, tow: merged.tow, status: merged.status,
+    };
+    const { error } = await supabase.from('mf_movements').upsert(row);
+    if (error) throw new Error(`movement save: ${error.message}`);
+    return merged;
+  }
+
+  /** Plan a movement. unitId undefined/omitted = support van (no trailer). */
+  async addMovement(
+    eventId: string, driverId: string,
+    opts: { unitId?: string; departDate?: string; departTime?: string } = {}
+  ): Promise<Movement> {
+    return this.saveMovementRow({
+      eventId, driverId, unitId: opts.unitId,
+      departDate: opts.departDate, departTime: opts.departTime || '08:00',
+      tow: !!opts.unitId, status: 'planned',
+    });
+  }
+
+  /** Cycle a movement's status forward: planned -> en-route -> on-site -> returned -> planned. */
+  async advanceMovement(id: string): Promise<void> {
+    const m = this.db.movements[id];
+    if (!m) return;
+    const i = MOVEMENT_STATUSES.indexOf(m.status);
+    const next = MOVEMENT_STATUSES[(i + 1) % MOVEMENT_STATUSES.length];
+    await this.saveMovementRow({ id, status: next });
+  }
+
+  async removeMovement(id: string): Promise<void> {
+    delete this.db.movements[id];
+    this.markLocalWrite('movements' as any, id);
+    this.emit();
+    const { error } = await supabase.from('mf_movements').delete().eq('id', id);
+    if (error) throw new Error(`movement remove: ${error.message}`);
+  }
+
+  /**
+   * Drivers eligible to be assigned a movement for a client: staff who can
+   * tow OR have the 'Driver' skill; if none qualify, fall back to the whole
+   * roster (matches the prototype — the tow warning still guards trailers).
+   */
+  eligibleDrivers(clientId: string): Staff[] {
+    const staff = this.staffForClient(clientId);
+    const isDriver = (s: Staff) => !!s.canTow || this.skillsOf(s).includes('Driver' as Area);
+    const drivers = staff.filter(isDriver);
+    return drivers.length ? drivers : staff;
+  }
+
+  /**
+   * For a given event, find drivers already on a movement for a DIFFERENT
+   * event (same client) whose dates overlap — i.e. genuinely double-booked,
+   * not just busy on this same event. Returns a map of driverId -> the name
+   * of the clashing event.
+   */
+  driverClashesForEvent(clientId: string, event: EventRec): Record<string, string> {
+    const clashes: Record<string, string> = {};
+    this.eventsForClient(clientId).forEach((other) => {
+      if (other.id === event.id) return;
+      if (!this.eventsOverlap(event, other)) return;
+      this.movementsForEvent(other.id).forEach((m) => { clashes[m.driverId] = other.name; });
+    });
+    return clashes;
+  }
+
+  /** Logistics summary for a client: total movements, en-route now, tow-capable drivers. */
+  logisticsSummary(clientId: string, today = this.today()): { movements: number; enRoute: number; towDrivers: number } {
+    const upcoming = this.eventsForClient(clientId).filter((e) => (e.end || e.start || '') >= today);
+    let movements = 0, enRoute = 0;
+    upcoming.forEach((e) => {
+      const mv = this.movementsForEvent(e.id);
+      movements += mv.length;
+      enRoute += mv.filter((m) => m.status === 'en-route').length;
+    });
+    const towDrivers = this.staffForClient(clientId).filter((s) => s.canTow).length;
+    return { movements, enRoute, towDrivers };
+  }
+
+  /* ============================================================
      IMPORT — load a prototype exportAll() JSON dump into Supabase.
      The prototype's dump is { clients:{}, events:{}, ... , kv:{} }.
      We upsert every row per table, translating kv.staffCerts /
@@ -830,7 +1130,7 @@ function emptyState(): OpsState {
     meta: { version: 1, updatedAt: Date.now() },
     clients: {}, events: {}, units: {}, staff: {},
     assignments: {}, stock: {}, applications: {}, kv: {},
-    certs: {}, availability: {},
+    certs: {}, availability: {}, pipeline: {}, movements: {},
   };
 }
 

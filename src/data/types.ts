@@ -128,6 +128,10 @@ export interface OpsState {
   // Promoted from kv in the hardening pass — real, per-crew tables.
   certs: Record<string, Cert>;
   availability: Record<string, AvailabilityDay>;
+  // Phase 8 — sales pipeline (operator-only; RLS-restricted).
+  pipeline: Record<string, PipelineEntry>;
+  // Phase 9 — logistics / vehicle & driver movements (operator-only).
+  movements: Record<string, Movement>;
 }
 
 export interface Cert {
@@ -141,6 +145,40 @@ export interface AvailabilityDay {
   staffId: string;
   date: string;
   available: boolean;   // false = unavailable that day
+}
+
+/* ---------------- Phase 8: Sales Pipeline (CRM) ---------------- */
+
+export type PipelineStage = 'lead' | 'contacted' | 'diagnostic' | 'proposal' | 'won' | 'lost';
+
+export const PIPELINE_STAGES: PipelineStage[] = ['lead', 'contacted', 'diagnostic', 'proposal', 'won', 'lost'];
+/** The forward funnel order, excluding the 'lost' side-branch. */
+export const PIPELINE_FUNNEL: PipelineStage[] = ['lead', 'contacted', 'diagnostic', 'proposal', 'won'];
+
+export interface PipelineEntry {
+  id: string;
+  name: string;                 // prospect name, free text until resolved to a client
+  clientId?: string;            // set once a job is booked -> a real mf_clients row
+  stage: PipelineStage;
+  priorStage?: PipelineStage;   // remembered so 'lost' can be reopened to where it was
+  value?: number;                // deal value, £
+  nextStep?: string;
+}
+
+/* ---------------- Phase 9: Logistics (vehicle & driver movements) ---------------- */
+
+export type MovementStatus = 'planned' | 'en-route' | 'on-site' | 'returned';
+export const MOVEMENT_STATUSES: MovementStatus[] = ['planned', 'en-route', 'on-site', 'returned'];
+
+export interface Movement {
+  id: string;
+  eventId: string;
+  unitId?: string;        // undefined = support van, no trailer
+  driverId: string;
+  departDate?: string;
+  departTime?: string;
+  tow: boolean;            // true when unitId is a real towed unit
+  status: MovementStatus;
 }
 
 export type TableName =

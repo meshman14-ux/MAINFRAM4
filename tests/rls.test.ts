@@ -46,6 +46,8 @@ beforeAll(async () => {
   await db.exec(sql('01_schema.sql'));
   await db.exec(sql('02_rls.sql'));
   await db.exec(sql('03_seed.sql'));
+  await db.exec(sql('05_pipeline.sql'));
+  await db.exec(sql('06_logistics.sql'));
   // A non-superuser role that does NOT bypass RLS (like Supabase 'authenticated').
   await db.exec(`
     create role authenticated nosuperuser nobypassrls;
@@ -129,5 +131,47 @@ describe('RLS: crew (S006, unassigned in seed)', () => {
     await expect(
       asUser(CREW, `insert into mf_certs(id, staff_id, type, expiry) values ('CERT-S001-x','S001','First Aid','2030-01-01')`)
     ).rejects.toBeTruthy();
+  });
+});
+
+describe('RLS: sales pipeline is operator-only (Phase 8)', () => {
+  it('owner can read and write the pipeline', async () => {
+    await asUser(OWNER, `insert into mf_pipeline(id, name, stage) values ('P001','Coastal Kitchen','lead')`);
+    const rows = await asUser(OWNER, `select id from mf_pipeline`);
+    expect(rows.some((r) => r.id === 'P001')).toBe(true);
+  });
+
+  it('crew cannot see the pipeline at all', async () => {
+    const rows = await asUser(CREW, `select id from mf_pipeline`);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('crew cannot write to the pipeline', async () => {
+    await expect(
+      asUser(CREW, `insert into mf_pipeline(id, name, stage) values ('P002','Sneaky Co','lead')`)
+    ).rejects.toBeTruthy();
+  });
+
+  it('client cannot see the pipeline at all', async () => {
+    const rows = await asUser(CLIENT, `select id from mf_pipeline`);
+    expect(rows).toHaveLength(0);
+  });
+});
+
+describe('RLS: logistics movements are operator-only (Phase 9)', () => {
+  it('owner can read and write movements', async () => {
+    await asUser(OWNER, `insert into mf_movements(id, event_id, driver_id, status) values ('MV001','E001','S001','planned')`);
+    const rows = await asUser(OWNER, `select id from mf_movements`);
+    expect(rows.some((r) => r.id === 'MV001')).toBe(true);
+  });
+
+  it('crew cannot see movements at all', async () => {
+    const rows = await asUser(CREW, `select id from mf_movements`);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('client cannot see movements at all', async () => {
+    const rows = await asUser(CLIENT, `select id from mf_movements`);
+    expect(rows).toHaveLength(0);
   });
 });
