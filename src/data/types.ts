@@ -134,6 +134,8 @@ export interface OpsState {
   movements: Record<string, Movement>;
   // Phase 10 — per-event tasks (operator-only).
   eventTasks: Record<string, EventTask>;
+  // Phase 11 — timesheets (clock in/out, payroll).
+  timesheets: Record<string, Timesheet>;
 }
 
 export interface Cert {
@@ -199,9 +201,32 @@ export interface EventTask {
   notes?: string;
 }
 
+/* ---------------- Phase 11: Timesheets ---------------- */
+
+export type TimesheetStatus = 'draft' | 'submitted' | 'approved' | 'paid';
+export const TIMESHEET_STATUSES: TimesheetStatus[] = ['draft', 'submitted', 'approved', 'paid'];
+
+export interface Timesheet {
+  id: string;
+  eventId: string;
+  unitId?: string;
+  staffId: string;
+  assignmentId?: string;
+  workDate: string;        // ISO 'YYYY-MM-DD'
+  clockIn?: string;        // ISO timestamp
+  clockOut?: string;       // ISO timestamp
+  breakMins?: number;
+  hours?: number;          // explicit override; else derived from clocks
+  rate?: number;           // override; else staff.rate
+  overtime?: boolean;
+  status: TimesheetStatus;
+  approvedBy?: string;     // auth user uuid
+  notes?: string;
+}
+
 export type TableName =
   | 'clients' | 'events' | 'units' | 'staff'
-  | 'assignments' | 'stock' | 'applications';
+  | 'assignments' | 'stock' | 'applications' | 'timesheets';
 
 /** Derived compliance result (from staffCompliance). */
 export interface Compliance {

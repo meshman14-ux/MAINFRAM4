@@ -19,6 +19,7 @@ const MORE: { label: string; route: string; roles: Role[] }[] = [
   { label: 'Compliance', route: '#/compliance', roles: ['owner', 'manager'] },
   { label: 'Stock',      route: '#/stock',      roles: ['owner', 'manager'] },
   { label: 'Finance',    route: '#/finance',    roles: ['owner', 'manager'] },
+  { label: 'Timesheets', route: '#/timesheets', roles: ['owner', 'manager'] },
   { label: 'Logistics',  route: '#/logistics',  roles: ['owner', 'manager'] },
   { label: 'Onboard',    route: '#/onboard',    roles: ['owner', 'manager'] },
 ];

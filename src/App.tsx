@@ -11,6 +11,7 @@ import Readiness from './pages/Readiness';
 import Compliance from './pages/Compliance';
 import StockOrdering from './pages/StockOrdering';
 import Finance from './pages/Finance';
+import Timesheets from './pages/Timesheets';
 import Pipeline from './pages/Pipeline';
 import Logistics from './pages/Logistics';
 import Tasks from './pages/Tasks';
@@ -54,6 +55,7 @@ const ROUTES: Record<string, RouteDef> = {
   compliance:{ page: 'Compliance', el: <Compliance />,  roles: ['owner', 'manager'] },
   stock:    { page: 'Stock',     el: <StockOrdering />, roles: ['owner', 'manager'] },
   finance:  { page: 'Finance',   el: <Finance />,       roles: ['owner', 'manager'] },
+  timesheets: { page: 'Timesheets', el: <Timesheets />, roles: ['owner', 'manager'] },
   pipeline: { page: 'Pipeline',  el: <Pipeline />,      roles: ['owner', 'manager'] },
   logistics:{ page: 'Logistics', el: <Logistics />,     roles: ['owner', 'manager'] },
   tasks:    { page: 'Tasks',     el: <Tasks />,         roles: ['owner', 'manager'] },

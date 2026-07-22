@@ -7,7 +7,7 @@
    ============================================================ */
 import type {
   Client, EventRec, Unit, Staff, Assignment, StockLine, Application,
-  TableName,
+  Timesheet, TableName,
 } from '../data/types';
 
 /* ---- DB table names per logical table ---- */
@@ -19,6 +19,7 @@ export const DB_TABLE: Record<TableName, string> = {
   assignments: 'mf_assignments',
   stock: 'mf_stock',
   applications: 'mf_applications',
+  timesheets: 'mf_timesheets',
 };
 
 /* ---- row -> domain ---- */
@@ -61,6 +62,17 @@ export const fromRow = {
     staffId: r.staff_id, area: r.area ?? undefined, status: r.status,
     overtime: r.overtime, assignmentId: r.assignment_id ?? undefined,
   }),
+  timesheets: (r: any): Timesheet => ({
+    id: r.id, eventId: r.event_id, unitId: r.unit_id ?? undefined,
+    staffId: r.staff_id, assignmentId: r.assignment_id ?? undefined,
+    workDate: r.work_date, clockIn: r.clock_in ?? undefined,
+    clockOut: r.clock_out ?? undefined,
+    breakMins: r.break_mins != null ? Number(r.break_mins) : undefined,
+    hours: r.hours != null ? Number(r.hours) : undefined,
+    rate: r.rate != null ? Number(r.rate) : undefined,
+    overtime: r.overtime, status: r.status,
+    approvedBy: r.approved_by ?? undefined, notes: r.notes ?? undefined,
+  }),
 };
 
 /* ---- domain -> row (only defined keys, so partial upserts work) ---- */
@@ -99,6 +111,14 @@ export const toRow = {
     id: o.id, event_id: o.eventId, unit_id: o.unitId,
     staff_id: o.staffId, area: o.area, status: o.status,
     overtime: o.overtime, assignment_id: o.assignmentId,
+  }),
+  timesheets: (o: Partial<Timesheet>): any => prune({
+    id: o.id, event_id: o.eventId, unit_id: o.unitId,
+    staff_id: o.staffId, assignment_id: o.assignmentId,
+    work_date: o.workDate, clock_in: o.clockIn, clock_out: o.clockOut,
+    break_mins: o.breakMins, hours: o.hours, rate: o.rate,
+    overtime: o.overtime, status: o.status,
+    approved_by: o.approvedBy, notes: o.notes,
   }),
 };
 

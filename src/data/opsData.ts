@@ -23,6 +23,7 @@ import type {
   OpsState, TableName, EventRec, Unit, Staff, Client,
   Assignment, StockLine, Application, Area, Compliance, Candidate,
   Cert, AvailabilityDay, PipelineEntry, PipelineStage, Movement, EventTask,
+  Timesheet,
 } from './types';
 import { PIPELINE_FUNNEL, MOVEMENT_STATUSES } from './types';
 
@@ -31,7 +32,7 @@ type Sub = () => void;
 
 const PREFIX: Record<TableName, string> = {
   clients: 'C', events: 'E', units: 'U', staff: 'S',
-  assignments: 'A', stock: 'K', applications: 'P',
+  assignments: 'A', stock: 'K', applications: 'P', timesheets: 'T',
 };
 
 const AREAS: Area[] = ['Bar', 'Coffee', 'Food', 'General', 'Driver', 'Supervisor'];
@@ -409,6 +410,20 @@ export class OpsData {
   }
   applicationsForStaff(sid: string): Application[] {
     return this.all<Application>('applications').filter((p) => p.staffId === sid);
+  }
+  timesheetsForEvent(eid: string): Timesheet[] {
+    return this.all<Timesheet>('timesheets').filter((t) => t.eventId === eid);
+  }
+  timesheetsForStaff(sid: string): Timesheet[] {
+    return this.all<Timesheet>('timesheets').filter((t) => t.staffId === sid);
+  }
+  /** Hours for a timesheet: explicit `hours` wins; else clock-out − clock-in − break. */
+  timesheetHours(t: Timesheet): number {
+    if (t.hours != null) return Number(t.hours) || 0;
+    if (!t.clockIn || !t.clockOut) return 0;
+    const ms = new Date(t.clockOut).getTime() - new Date(t.clockIn).getTime();
+    if (!isFinite(ms)) return 0;
+    return Math.max(0, ms / 3600000 - (Number(t.breakMins) || 0) / 60);
   }
 
   /* ---------------- Phase 5 workflow helpers ---------------- */
@@ -1241,6 +1256,7 @@ function emptyState(): OpsState {
     clients: {}, events: {}, units: {}, staff: {},
     assignments: {}, stock: {}, applications: {}, kv: {},
     certs: {}, availability: {}, pipeline: {}, movements: {}, eventTasks: {},
+    timesheets: {},
   };
 }
 
