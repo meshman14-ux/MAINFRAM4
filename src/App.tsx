@@ -13,6 +13,7 @@ import StockOrdering from './pages/StockOrdering';
 import Finance from './pages/Finance';
 import Pipeline from './pages/Pipeline';
 import Logistics from './pages/Logistics';
+import Tasks from './pages/Tasks';
 import ClientPortal from './pages/ClientPortal';
 import Login from './pages/Login';
 import SetNewPassword from './pages/SetNewPassword';
@@ -26,6 +27,7 @@ import './styles/phase5.css';
 import './styles/phase6.css';
 import './styles/pipeline.css';
 import './styles/logistics.css';
+import './styles/tasks.css';
 import './styles/portal.css';
 import './styles/auth.css';
 
@@ -54,6 +56,7 @@ const ROUTES: Record<string, RouteDef> = {
   finance:  { page: 'Finance',   el: <Finance />,       roles: ['owner', 'manager'] },
   pipeline: { page: 'Pipeline',  el: <Pipeline />,      roles: ['owner', 'manager'] },
   logistics:{ page: 'Logistics', el: <Logistics />,     roles: ['owner', 'manager'] },
+  tasks:    { page: 'Tasks',     el: <Tasks />,         roles: ['owner', 'manager'] },
   portal:   { page: 'My Events', el: <ClientPortal />,  roles: ['client'] },
   events:   { page: 'Events',    el: <EventsRegister />, roles: ['owner', 'manager', 'client'] },
   calendar: { page: 'Calendar',  el: <Calendar />,      roles: ['owner', 'manager', 'client'] },

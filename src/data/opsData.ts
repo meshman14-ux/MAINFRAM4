@@ -22,7 +22,7 @@ import { DB_TABLE, fromRow, toRow } from './mappers';
 import type {
   OpsState, TableName, EventRec, Unit, Staff, Client,
   Assignment, StockLine, Application, Area, Compliance, Candidate,
-  Cert, AvailabilityDay, PipelineEntry, PipelineStage, Movement,
+  Cert, AvailabilityDay, PipelineEntry, PipelineStage, Movement, EventTask,
 } from './types';
 import { PIPELINE_FUNNEL, MOVEMENT_STATUSES } from './types';
 
@@ -126,6 +126,18 @@ export class OpsData {
     });
     this.db.movements = movements;
 
+    // event tasks — Phase 10, operator-only
+    const { data: taskRows } = await supabase.from('mf_event_tasks').select('*');
+    const eventTasks: Record<string, any> = {};
+    (taskRows ?? []).forEach((r: Row) => {
+      eventTasks[r.id] = {
+        id: r.id, eventId: r.event_id, title: r.title, category: r.category,
+        done: !!r.done, dueDate: r.due_date ?? undefined,
+        assignedTo: r.assigned_to ?? undefined, notes: r.notes ?? undefined,
+      };
+    });
+    this.db.eventTasks = eventTasks;
+
     this.ready = true;
     this.subscribeRealtime();
     this.emit();
@@ -172,8 +184,30 @@ export class OpsData {
       { event: '*', schema: 'public', table: 'mf_movements' },
       (payload: any) => this.applyMovementRealtime(payload)
     );
+    ch.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'mf_event_tasks' },
+      (payload: any) => this.applyTaskRealtime(payload)
+    );
     ch.subscribe();
     this.channel = ch;
+  }
+
+  private applyTaskRealtime(payload: any): void {
+    if (payload.eventType === 'DELETE') {
+      const id = payload.old?.id;
+      if (id) delete this.db.eventTasks[id];
+    } else {
+      const r = payload.new;
+      if (!r?.id) return;
+      if (this.isOwnEcho('eventTasks' as any, r.id)) return;
+      this.db.eventTasks[r.id] = {
+        id: r.id, eventId: r.event_id, title: r.title, category: r.category,
+        done: !!r.done, dueDate: r.due_date ?? undefined,
+        assignedTo: r.assigned_to ?? undefined, notes: r.notes ?? undefined,
+      };
+    }
+    this.emit();
   }
 
   private applyMovementRealtime(payload: any): void {
@@ -868,6 +902,82 @@ export class OpsData {
   }
 
   /* ============================================================
+     EVENT TASKS (Phase 10) — from user feedback, not a prototype
+     port. Tasks tied to a specific event, colour-coded by category,
+     sortable by due date so an operator can work their "timetable"
+     across every upcoming event. Operator-only for now.
+     ============================================================ */
+
+  tasksForEvent(eventId: string): EventTask[] {
+    return Object.values(this.db.eventTasks).filter((t) => t.eventId === eventId);
+  }
+
+  /** Every task across a client's events, each annotated with its event. */
+  tasksForClient(clientId: string): (EventTask & { eventName: string; eventStart?: string })[] {
+    const eventIds = new Set(this.eventsForClient(clientId).map((e) => e.id));
+    const byId = new Map(this.eventsForClient(clientId).map((e) => [e.id, e]));
+    return Object.values(this.db.eventTasks)
+      .filter((t) => eventIds.has(t.eventId))
+      .map((t) => ({ ...t, eventName: byId.get(t.eventId)?.name ?? '', eventStart: byId.get(t.eventId)?.start }));
+  }
+
+  private async saveTaskRow(t: Partial<EventTask> & { id?: string }): Promise<EventTask> {
+    const id = t.id || this.uid('eventTasks' as any);
+    const bucket = this.db.eventTasks;
+    const merged = Object.assign({}, bucket[id], t, { id }) as EventTask;
+    bucket[id] = merged;
+    this.markLocalWrite('eventTasks' as any, id);
+    this.emit();
+    const row = {
+      id: merged.id, event_id: merged.eventId, title: merged.title, category: merged.category,
+      done: merged.done, due_date: merged.dueDate ?? null,
+      assigned_to: merged.assignedTo ?? null, notes: merged.notes ?? null,
+    };
+    const { error } = await supabase.from('mf_event_tasks').upsert(row);
+    if (error) throw new Error(`task save: ${error.message}`);
+    return merged;
+  }
+
+  async addTask(
+    eventId: string, title: string,
+    opts: { category?: EventTask['category']; dueDate?: string; assignedTo?: string; notes?: string } = {}
+  ): Promise<EventTask> {
+    return this.saveTaskRow({
+      eventId, title: title.trim(), category: opts.category || 'General',
+      dueDate: opts.dueDate, assignedTo: opts.assignedTo, notes: opts.notes, done: false,
+    });
+  }
+
+  async toggleTaskDone(id: string): Promise<void> {
+    const t = this.db.eventTasks[id];
+    if (!t) return;
+    await this.saveTaskRow({ id, done: !t.done });
+  }
+
+  async removeTask(id: string): Promise<void> {
+    delete this.db.eventTasks[id];
+    this.markLocalWrite('eventTasks' as any, id);
+    this.emit();
+    const { error } = await supabase.from('mf_event_tasks').delete().eq('id', id);
+    if (error) throw new Error(`task remove: ${error.message}`);
+  }
+
+  /** A task is overdue if it has a due date in the past and isn't done. */
+  isTaskOverdue(t: EventTask, today = this.today()): boolean {
+    return !t.done && !!t.dueDate && t.dueDate < today;
+  }
+
+  /** Counts for the category tabs + an overdue count, for a client's tasks. */
+  taskSummary(clientId: string, today = this.today()): { total: number; open: number; overdue: number; byCategory: Record<string, number> } {
+    const tasks = this.tasksForClient(clientId);
+    const open = tasks.filter((t) => !t.done);
+    const overdue = open.filter((t) => this.isTaskOverdue(t, today));
+    const byCategory: Record<string, number> = {};
+    open.forEach((t) => { byCategory[t.category] = (byCategory[t.category] || 0) + 1; });
+    return { total: tasks.length, open: open.length, overdue: overdue.length, byCategory };
+  }
+
+  /* ============================================================
      IMPORT — load a prototype exportAll() JSON dump into Supabase.
      The prototype's dump is { clients:{}, events:{}, ... , kv:{} }.
      We upsert every row per table, translating kv.staffCerts /
@@ -1130,7 +1240,7 @@ function emptyState(): OpsState {
     meta: { version: 1, updatedAt: Date.now() },
     clients: {}, events: {}, units: {}, staff: {},
     assignments: {}, stock: {}, applications: {}, kv: {},
-    certs: {}, availability: {}, pipeline: {}, movements: {},
+    certs: {}, availability: {}, pipeline: {}, movements: {}, eventTasks: {},
   };
 }
 

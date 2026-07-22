@@ -132,6 +132,8 @@ export interface OpsState {
   pipeline: Record<string, PipelineEntry>;
   // Phase 9 — logistics / vehicle & driver movements (operator-only).
   movements: Record<string, Movement>;
+  // Phase 10 — per-event tasks (operator-only).
+  eventTasks: Record<string, EventTask>;
 }
 
 export interface Cert {
@@ -179,6 +181,22 @@ export interface Movement {
   departTime?: string;
   tow: boolean;            // true when unitId is a real towed unit
   status: MovementStatus;
+}
+
+/* ---------------- Phase 10: per-event Tasks ---------------- */
+
+export type TaskCategory = 'Prep' | 'Crew' | 'Stock' | 'Compliance' | 'Client' | 'General';
+export const TASK_CATEGORIES: TaskCategory[] = ['Prep', 'Crew', 'Stock', 'Compliance', 'Client', 'General'];
+
+export interface EventTask {
+  id: string;
+  eventId: string;
+  title: string;
+  category: TaskCategory;
+  done: boolean;
+  dueDate?: string;
+  assignedTo?: string;    // staff id
+  notes?: string;
 }
 
 export type TableName =

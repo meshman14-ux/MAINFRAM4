@@ -207,24 +207,55 @@ The schema and data layer were aligned to the engineering blueprint:
       ported from the original prototype library
 - [x] **Phase 9** — Logistics (vehicle & driver movements), second of the
       operational features
+- [x] **Phase 10** — Event Tasks, first item from the user-feedback batch
 
-**All seven blueprint phases plus Phases 8–9 are built.** See `DEPLOY.md` for
+**All seven blueprint phases plus Phases 8–10 are built.** See `DEPLOY.md` for
 going live and `LAUNCH_CHECKLIST.md` for the real-users pre-flight. New work
 after go-live ships as additive migrations (see `05_pipeline.sql`,
-`06_logistics.sql`) so a live database never needs to be rebuilt.
+`06_logistics.sql`, `07_tasks.sql`) so a live database never needs to be
+rebuilt.
 
 ### Banked for later (from user feedback, not yet built)
 
 A round of handwritten feedback covered UI polish across Compliance, Home,
-Console, Callouts, Calendar and Events, plus three larger asks, scoped but
-deliberately deferred until after the operational-features batch:
-- A **per-event task module** (not a personal to-do list — tasks tied to
-  specific events, closer to a generalised version of the existing unit
-  checklist / event-readiness steps).
+Console, Callouts, Calendar and Events, plus three larger asks. The task
+module (below) is done; still queued:
 - **PWA installability** so the web app can be added to an Android home
   screen (a manifest + service worker — much smaller than a native app).
 - A **detailed new-client onboarding flow** with a full diagnostic and
   checklist, surfaced on the Home page.
+- Wiring **"add to task" quick-actions onto other screens** (e.g. turning a
+  Compliance issue or a low-stock line directly into a task) — the
+  underlying `addTask()` method is generic enough to support this now; only
+  the buttons on those other screens remain.
+- The UI polish pass itself (widget widths, cross-navigation between
+  widgets, row descriptions, visual tidy-ups).
+
+---
+
+## Phase 10 — Event Tasks (built)
+
+From user feedback, not a prototype port: tasks tied to a specific event
+(not a personal to-do list), colour-coded by category, sortable by due date
+so an operator can work their "timetable" across every upcoming event.
+
+- **Tasks page** (`#/tasks`, operator-only, on the primary nav given how
+  often it's likely to be used) — add a task against an event with a
+  category and optional due date, filter by colour-coded category tabs
+  (Prep / Crew / Stock / Compliance / Client / General), tick off when done,
+  remove when no longer needed. A summary strip shows open tasks, overdue
+  count, and total. `src/pages/Tasks.tsx`.
+- **Sorting matches the "timetable" framing**: open tasks sort by due date
+  ascending (undated tasks last), done tasks always sort to the bottom
+  regardless of date — verified in the screenshot with a 6-task mix across
+  two events.
+- **Overdue is done-aware**: a task with a past due date that's already
+  been completed is never flagged overdue, even though the date has passed
+  — proven with a dedicated test.
+- **Operator-only for now** — `mf_event_tasks` is RLS-restricted like
+  Pipeline and Logistics. A crew-facing "my tasks" view (via the
+  `assignedTo` field, already in the schema) is a natural follow-on for
+  Staff Hub, not built yet.
 
 ---
 
@@ -318,10 +349,11 @@ tests/phase6.test.ts        9  compliance / double-booking / reorder / finance
 tests/portal.test.ts        4  client portal: own-events isolation + progress
 tests/pipeline.test.ts     16  CRM stages, lost/reopen, book-job, summary math
 tests/logistics.test.ts    12  movements, status cycling, driver clash detection
-tests/routing.test.ts      13  role landing + route guarding + pipeline/logistics/portal access
-tests/rls.test.ts          18  RLS scope + crew self-service + JWT seam + pipeline/logistics lock (real Postgres)
+tests/tasks.test.ts        11  task CRUD, overdue detection (done-aware), category summary
+tests/routing.test.ts      14  role landing + route guarding + pipeline/logistics/tasks/portal access
+tests/rls.test.ts          21  RLS scope + crew self-service + JWT seam + pipeline/logistics/tasks lock (real Postgres)
                            ---
-                          137  all passing
+                          152  all passing
 ```
 
 ---

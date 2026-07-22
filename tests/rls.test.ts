@@ -48,6 +48,7 @@ beforeAll(async () => {
   await db.exec(sql('03_seed.sql'));
   await db.exec(sql('05_pipeline.sql'));
   await db.exec(sql('06_logistics.sql'));
+  await db.exec(sql('07_tasks.sql'));
   // A non-superuser role that does NOT bypass RLS (like Supabase 'authenticated').
   await db.exec(`
     create role authenticated nosuperuser nobypassrls;
@@ -172,6 +173,24 @@ describe('RLS: logistics movements are operator-only (Phase 9)', () => {
 
   it('client cannot see movements at all', async () => {
     const rows = await asUser(CLIENT, `select id from mf_movements`);
+    expect(rows).toHaveLength(0);
+  });
+});
+
+describe('RLS: event tasks are operator-only (Phase 10)', () => {
+  it('owner can read and write tasks', async () => {
+    await asUser(OWNER, `insert into mf_event_tasks(id, event_id, title, category) values ('T001','E001','Confirm crew','General')`);
+    const rows = await asUser(OWNER, `select id from mf_event_tasks`);
+    expect(rows.some((r) => r.id === 'T001')).toBe(true);
+  });
+
+  it('crew cannot see event tasks at all', async () => {
+    const rows = await asUser(CREW, `select id from mf_event_tasks`);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('client cannot see event tasks at all', async () => {
+    const rows = await asUser(CLIENT, `select id from mf_event_tasks`);
     expect(rows).toHaveLength(0);
   });
 });
