@@ -9,8 +9,9 @@ const clock = (iso?: string) => iso ? new Date(iso).toLocaleTimeString('en-GB', 
 const gbp = (n: number) => '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const hrs = (n: number) => (Math.round(n * 10) / 10).toLocaleString('en-GB');
 
+// Semantic coding (neon spec §2): informational=blue, pending=yellow, done/paid=green.
 const STATUS_COLOR: Record<Timesheet['status'], string> = {
-  draft: 'var(--ink-2)', submitted: 'var(--amber)', approved: 'var(--green)', paid: 'var(--ink-2)',
+  draft: 'var(--neon-blue)', submitted: 'var(--neon-yellow)', approved: 'var(--neon-green)', paid: 'var(--neon-green)',
 };
 
 export default function Timesheets() {
@@ -114,10 +115,10 @@ export default function Timesheets() {
       </div>
 
       <div className="stat-strip">
-        <div className="stat-box"><div className="v">{hrs(totalHours)}</div><div className="k">Total hours</div></div>
-        <div className="stat-box"><div className="v">{gbp(totalCost)}</div><div className="k">Payroll cost</div></div>
-        <div className="stat-box"><div className="v">{allSheets.length}</div><div className="k">Timesheets</div></div>
-        <div className="stat-box"><div className="v">{pending}</div><div className="k">Awaiting approval</div></div>
+        <div className="stat-box" data-tone="blue"><div className="v">{hrs(totalHours)}</div><div className="k">Total hours</div></div>
+        <div className="stat-box" data-tone="green"><div className="v">{gbp(totalCost)}</div><div className="k">Payroll cost</div></div>
+        <div className="stat-box" data-tone="blue"><div className="v">{allSheets.length}</div><div className="k">Timesheets</div></div>
+        <div className="stat-box" data-tone="amber"><div className="v">{pending}</div><div className="k">Awaiting approval</div></div>
       </div>
 
       <div className="ts-form">
@@ -147,7 +148,7 @@ export default function Timesheets() {
         payroll.filter((p) => p.sheets.length > 0).map(({ event, rows, sheets }) => (
           <div key={event.id} className="ts-section">
             <div className="ts-head">
-              <span className="fin-swatch" style={{ background: data.eventColor(event.id) }} />
+              <span className="fin-swatch" style={{ background: data.eventColor(event.id), color: data.eventColor(event.id) }} />
               <strong>{event.name}</strong>
               <span className="mono" style={{ fontSize: 12 }}>
                 {fmt(event.start)}{event.end && event.end !== event.start ? `–${fmt(event.end)}` : ''}

@@ -39,10 +39,10 @@ export default function Finance() {
       {fin && (
         <>
           <div className="stat-strip">
-            <div className="stat-box"><div className="v">{gbp(fin.totalCrewCost)}</div><div className="k">Total crew cost</div></div>
-            <div className="stat-box"><div className="v">{gbp(fin.upcomingCost)}</div><div className="k">Upcoming</div></div>
-            <div className="stat-box"><div className="v">{fin.totalConfirmed}</div><div className="k">Confirmed shifts</div></div>
-            <div className="stat-box"><div className="v">{fin.events.length}</div><div className="k">Events</div></div>
+            <div className="stat-box" data-tone="green"><div className="v">{gbp(fin.totalCrewCost)}</div><div className="k">Total crew cost</div></div>
+            <div className="stat-box" data-tone="green"><div className="v">{gbp(fin.upcomingCost)}</div><div className="k">Upcoming</div></div>
+            <div className="stat-box" data-tone="blue"><div className="v">{fin.totalConfirmed}</div><div className="k">Confirmed shifts</div></div>
+            <div className="stat-box" data-tone="blue"><div className="v">{fin.events.length}</div><div className="k">Events</div></div>
           </div>
 
           {fin.events.length === 0 ? (
@@ -60,7 +60,7 @@ export default function Finance() {
               <tbody>
                 {fin.events.map((e) => (
                   <tr key={e.eventId}>
-                    <td><span className="fin-swatch" style={{ background: e.color }} />{e.eventName}</td>
+                    <td><span className="fin-swatch" style={{ background: e.color, color: e.color }} />{e.eventName}</td>
                     <td className="mono" style={{ fontSize: 12 }}>{fmt(e.start)}{e.end && e.end !== e.start ? `–${fmt(e.end)}` : ''}</td>
                     <td className="num">{e.tradingHours}</td>
                     <td className="num">{e.confirmedCrew}</td>

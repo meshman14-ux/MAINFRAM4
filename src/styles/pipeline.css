@@ -26,9 +26,10 @@
   background: var(--panel); color: var(--ink-2); font-size: 13px; cursor: pointer;
   display: grid; place-items: center; padding: 0;
 }
-.pipe-arrow:disabled { color: var(--ink-3); opacity: 0.4; cursor: default; }
-.pipe-arrow.danger { color: var(--red); margin-left: auto; }
-.pipe-arrow.job { color: var(--green); }
+.pipe-arrow:hover:not(:disabled) { color: var(--neon-cyan); border-color: color-mix(in oklch, var(--neon-cyan) 55%, transparent); box-shadow: var(--glow-sm) color-mix(in oklch, var(--neon-cyan) 45%, transparent); }
+.pipe-arrow:disabled { color: var(--ink-3); opacity: 0.4; cursor: default; box-shadow: none; }
+.pipe-arrow.danger { color: var(--neon-pink); margin-left: auto; }
+.pipe-arrow.job { color: var(--neon-green); }
 .pipe-empty-col { color: var(--ink-3); font-size: 12px; text-align: center; padding: 14px 4px; border: 1px dashed var(--panel-line); border-radius: var(--r-sm); }
 
 /* add-lead + summary bar */

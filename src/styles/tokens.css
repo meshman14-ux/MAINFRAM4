@@ -1,45 +1,69 @@
 /* ============================================================
-   MAINFRAME — design tokens
-   Matched to the existing prototype look (Home / Ops Console
-   screenshots): near-black canvas, cool slate panels, monospace
-   eyebrows, per-status accent colours, coloured KPI numerals.
+   MAINFRAME — design tokens · NEON
+   Dark-first cyberpunk system. Every sheet consumes tokens only.
+   Legacy names (--panel, --ink, --green, …) are kept as aliases
+   so no class or consumer had to be renamed.
    ============================================================ */
 
 :root {
-  /* --- surfaces --- */
-  --bg:        #05070a;   /* app canvas — near-black with a cool cast */
-  --bg-grad-1: #0a1420;   /* subtle top-left glow used on hero areas */
-  --panel:     #0d1219;   /* card background */
-  --panel-2:   #111823;   /* raised / hover card */
-  --panel-line:#1c2634;   /* hairline borders */
-  --inset:     #0a0e14;   /* inset wells (rows inside cards) */
+  /* --- base surfaces (spec §1) --- */
+  --bg:        oklch(0.13 0.02 280);            /* near-black indigo canvas */
+  --surface:   oklch(0.17 0.03 280);            /* card background */
+  --surface-2: oklch(0.21 0.04 285);            /* raised / hover card */
+  --border:    oklch(0.35 0.06 290 / 0.5);      /* hairline borders */
+  --inset:     oklch(0.15 0.025 280);           /* inset wells (rows in cards) */
 
-  /* --- text --- */
-  --ink:       #eef2f7;   /* primary text */
-  --ink-2:     #9aa7b8;   /* secondary text */
-  --ink-3:     #5f6d7e;   /* muted / captions */
+  /* --- text (≥4.5:1 body, ≥3:1 large — verified against --bg/--surface) --- */
+  --text:      oklch(0.93 0.02 280);
+  --text-dim:  oklch(0.72 0.03 285);
+  --text-mute: oklch(0.64 0.04 285);            /* captions — still ≥4.5:1 on bg */
 
-  /* --- accents (status + areas) --- */
-  --blue:   oklch(0.72 0.19 250);
-  --green:  oklch(0.74 0.21 150);
-  --amber:  oklch(0.78 0.16 70);
-  --violet: oklch(0.66 0.24 300);
-  --pink:   oklch(0.72 0.22 350);
-  --cyan:   oklch(0.78 0.13 200);
-  --red:    oklch(0.66 0.24 20);
+  /* --- neon accents: one semantic job each (spec §1) --- */
+  --neon-cyan:   oklch(0.85 0.15 195);   /* primary actions, links, active nav, focus */
+  --neon-pink:   oklch(0.72 0.24 350);   /* destructive / blocked / errors */
+  --neon-purple: oklch(0.65 0.22 295);   /* selected states, secondary highlights */
+  --neon-green:  oklch(0.83 0.20 150);   /* success, confirmed, compliant, paid */
+  --neon-yellow: oklch(0.90 0.16 100);   /* warnings, expiring, pending, overtime */
+  --neon-blue:   oklch(0.70 0.19 250);   /* informational, neutral badges, counts */
+  /* Purple at L0.65 fails 4.5:1 as small TEXT on tinted dark chips — text-bearing
+     purple uses this lifted step instead (borders/fills keep the true purple). */
+  --neon-purple-text: oklch(0.78 0.15 295);
+
+  /* --- glows: sizes only; always color-matched at the use-site via
+         box-shadow: var(--glow-*) color-mix(in oklch, var(--neon-x) 55%, transparent) --- */
+  --glow-sm: 0 0 6px;
+  --glow-md: 0 0 14px;
+  --glow-lg: 0 0 28px;
+
+  /* ---------- legacy aliases (consumed across every sheet) ---------- */
+  --panel:      var(--surface);
+  --panel-2:    var(--surface-2);
+  --panel-line: var(--border);
+  --ink:        var(--text);
+  --ink-2:      var(--text-dim);
+  --ink-3:      var(--text-mute);
+  --bg-grad-1:  color-mix(in oklch, var(--neon-cyan) 5%, transparent);
+
+  --blue:   var(--neon-blue);
+  --green:  var(--neon-green);
+  --amber:  var(--neon-yellow);
+  --violet: var(--neon-purple-text);   /* violet is only ever used as text */
+  --pink:   var(--neon-pink);
+  --cyan:   var(--neon-cyan);
+  --red:    var(--neon-pink);          /* destructive is pink in the neon system */
 
   /* semantic */
-  --accent:      var(--blue);
-  --ok:          var(--green);
-  --warn:        var(--amber);
-  --danger:      var(--red);
+  --accent:      var(--neon-cyan);
+  --ok:          var(--neon-green);
+  --warn:        var(--neon-yellow);
+  --danger:      var(--neon-pink);
 
-  /* --- type --- */
+  /* --- type (unchanged stacks — no new imports) --- */
   --font-display: 'Space Grotesk', system-ui, sans-serif;
   --font-body:    'Inter', system-ui, sans-serif;
   --font-mono:    'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
-  /* --- geometry --- */
+  /* --- geometry (unchanged — reskin, not relayout) --- */
   --r-lg: 16px;
   --r-md: 12px;
   --r-sm: 8px;
@@ -53,36 +77,69 @@
 
 html, body, #root { height: 100%; }
 
+/* Atmosphere (spec §3): two fixed washes, cyan top-left + purple bottom-right,
+   ≤4% alpha — content stays fully readable. */
 body {
   margin: 0;
   background:
-    radial-gradient(1200px 600px at 15% -10%, var(--bg-grad-1), transparent 60%),
+    radial-gradient(1100px 640px at 12% -8%, color-mix(in oklch, var(--neon-cyan) 4%, transparent), transparent 62%),
+    radial-gradient(1100px 640px at 92% 108%, color-mix(in oklch, var(--neon-purple) 4%, transparent), transparent 62%),
     var(--bg);
-  color: var(--ink);
+  background-attachment: fixed;
+  color: var(--text);
   font-family: var(--font-body);
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
-/* eyebrow / section kicker — monospace, tracked out, like the screenshots */
+/* eyebrow / section kicker */
 .eyebrow {
   font-family: var(--font-mono);
   font-size: 12px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--text-mute);
 }
 
 .mono { font-family: var(--font-mono); }
 
 a { color: inherit; }
 
-/* focus visibility — accessibility floor */
+/* --- motion (spec §4): interactive elements only, 150ms ease-out --- */
+a, button, input, select, textarea,
+.btn, .chip, .pill, .tag, .tab, .task-tab, .pipe-arrow, .pipe-card,
+.event-row, .reg-row, .cal-ev, .avail-day, .nav a, .nav-more-btn {
+  transition: color 150ms ease-out, background-color 150ms ease-out,
+              border-color 150ms ease-out, box-shadow 150ms ease-out,
+              transform 150ms ease-out;
+}
+
+/* attention pulse — applied ONLY to: open-callout switches, blocked/expired
+   compliance chips, overdue task dues (spec §4). */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: var(--glow-sm) var(--pulse-c, color-mix(in oklch, var(--neon-pink) 55%, transparent)); }
+  50%      { box-shadow: var(--glow-md) var(--pulse-c, color-mix(in oklch, var(--neon-pink) 55%, transparent)); }
+}
+
+/* focus visibility — accessibility floor (spec §5): cyan ring + glow, never removed */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--neon-cyan);
   outline-offset: 2px;
   border-radius: 4px;
+  box-shadow: var(--glow-sm) color-mix(in oklch, var(--neon-cyan) 55%, transparent);
+}
+
+/* Hover lift (spec §4) — only when motion is welcome; the reduced-motion
+   block below must not fight functional transforms (e.g. switch knobs). */
+@media (prefers-reduced-motion: no-preference) {
+  .btn:hover:not(:disabled),
+  .btn-primary:hover:not(:disabled),
+  .auth-btn:hover:not(:disabled),
+  .ts-form button:hover:not(:disabled),
+  .pipe-card:hover,
+  .reg-row:hover,
+  .event-row:hover { transform: translateY(-1px); }
 }
 
 @media (prefers-reduced-motion: reduce) {

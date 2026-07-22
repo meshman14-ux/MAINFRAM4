@@ -32,9 +32,14 @@
 .meter .mbar { height: 8px; border-radius: 999px; background: var(--inset); overflow: hidden; }
 .meter .mfill { height: 100%; border-radius: 999px; transition: width 0.3s; }
 
-.portal-status { font-family: var(--font-mono); font-size: 11px; padding: 3px 9px; border-radius: 999px; }
-.portal-status[data-ready="true"] { color: var(--green); border: 1px solid color-mix(in oklab, var(--green) 45%, var(--panel-line)); }
-.portal-status[data-ready="false"] { color: var(--ink-3); border: 1px solid var(--panel-line); }
+.portal-status {
+  font-family: var(--font-mono); font-size: 11px; padding: 3px 9px; border-radius: 999px;
+  border: 1px solid color-mix(in oklch, currentColor 45%, transparent);
+  background: color-mix(in oklch, currentColor 15%, transparent);
+  box-shadow: var(--glow-sm) color-mix(in oklch, currentColor 55%, transparent);
+}
+.portal-status[data-ready="true"] { color: var(--neon-green); }
+.portal-status[data-ready="false"] { color: var(--ink-3); box-shadow: none; }
 
 @media (max-width: 640px) {
   .portal-meters { grid-template-columns: 1fr; }

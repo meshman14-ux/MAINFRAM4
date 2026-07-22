@@ -17,44 +17,63 @@
 .brand-badge {
   width: 34px; height: 34px; border-radius: 9px;
   display: grid; place-items: center;
-  background: linear-gradient(145deg, #182231, #0c131c);
-  border: 1px solid var(--panel-line);
-  font-family: var(--font-mono); font-weight: 600; color: var(--ink);
+  background: linear-gradient(145deg, var(--surface-2), var(--inset));
+  border: 1px solid color-mix(in oklch, var(--neon-cyan) 35%, var(--border));
+  box-shadow: var(--glow-sm) color-mix(in oklch, var(--neon-cyan) 35%, transparent);
+  font-family: var(--font-mono); font-weight: 600; color: var(--neon-cyan);
 }
 .brand-name { font-family: var(--font-display); font-weight: 600; letter-spacing: 0.02em; }
 .brand-sub  { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em; color: var(--ink-3); }
 .topbar-spacer { flex: 1; }
 .topbar-date { font-family: var(--font-mono); font-size: 13px; color: var(--ink-2); }
 
+/* Navigation (spec §2): inactive dim · hover cyan + glowing underline ·
+   active cyan with a 2px cyan bottom border and a stronger glow. */
 .nav { display: flex; gap: 4px; margin-left: 8px; }
 .nav a {
-  padding: 7px 12px; border-radius: 8px; font-size: 14px;
-  color: var(--ink-2); text-decoration: none;
+  padding: 7px 12px; border-radius: 8px 8px 0 0; font-size: 14px;
+  color: var(--text-dim); text-decoration: none;
+  border-bottom: 2px solid transparent;
 }
-.nav a[aria-current="page"] { background: var(--panel-2); color: var(--ink); }
-.nav a:hover { color: var(--ink); }
+.nav a:hover {
+  color: var(--neon-cyan);
+  border-bottom-color: color-mix(in oklch, var(--neon-cyan) 60%, transparent);
+  box-shadow: var(--glow-sm) color-mix(in oklch, var(--neon-cyan) 40%, transparent);
+}
+.nav a[aria-current="page"] {
+  color: var(--neon-cyan);
+  border-bottom-color: var(--neon-cyan);
+  box-shadow: var(--glow-md) color-mix(in oklch, var(--neon-cyan) 45%, transparent);
+}
 
 /* "More" dropdown for secondary operator tools */
 .nav-more-btn {
   font: inherit; font-size: 14px; cursor: pointer;
-  background: none; border: none; color: var(--ink-3);
+  background: none; border: none; color: var(--text-dim);
   padding: 6px 10px; border-radius: var(--r-sm);
+  border-bottom: 2px solid transparent;
 }
-.nav-more-btn:hover { color: var(--ink); }
-.nav-more-btn[aria-current="page"] { background: var(--panel-2); color: var(--ink); }
+.nav-more-btn:hover { color: var(--neon-cyan); }
+.nav-more-btn[aria-current="page"] {
+  color: var(--neon-cyan);
+  border-bottom-color: var(--neon-cyan);
+  box-shadow: var(--glow-md) color-mix(in oklch, var(--neon-cyan) 45%, transparent);
+}
 .nav-more-menu {
   position: absolute; top: 100%; right: 0; margin-top: 6px; z-index: 50;
-  background: var(--panel); border: 1px solid var(--panel-line);
+  background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--r-md); padding: 6px; min-width: 160px;
-  box-shadow: 0 8px 28px rgba(0,0,0,0.4);
+  box-shadow:
+    0 8px 28px oklch(0 0 0 / 0.45),
+    var(--glow-sm) color-mix(in oklch, var(--neon-cyan) 25%, transparent);
   display: flex; flex-direction: column; gap: 2px;
 }
 .nav-more-menu a {
-  font-size: 14px; color: var(--ink-2); padding: 8px 12px;
+  font-size: 14px; color: var(--text-dim); padding: 8px 12px;
   border-radius: var(--r-sm); text-decoration: none;
 }
-.nav-more-menu a:hover { background: var(--panel-2); color: var(--ink); }
-.nav-more-menu a[aria-current="page"] { background: var(--panel-2); color: var(--ink); }
+.nav-more-menu a:hover { background: var(--surface-2); color: var(--neon-cyan); }
+.nav-more-menu a[aria-current="page"] { background: var(--surface-2); color: var(--neon-cyan); }
 
 /* page canvas */
 .page { max-width: var(--maxw); margin: 0 auto; padding: 24px; }
@@ -96,11 +115,16 @@
   background: var(--inset); border: 1px solid var(--panel-line);
 }
 .action-row + .action-row { margin-top: 8px; }
+/* Chip pattern (spec §2): tinted transparent bg (15%), tinted border (45%),
+   full-strength text, small color-matched glow — driven by currentColor so
+   one rule serves every status colour. */
 .tag {
   font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.1em;
   text-transform: uppercase; text-align: center;
   padding: 4px 6px; border-radius: 6px;
-  border: 1px solid currentColor;
+  background: color-mix(in oklch, currentColor 15%, transparent);
+  border: 1px solid color-mix(in oklch, currentColor 45%, transparent);
+  box-shadow: var(--glow-sm) color-mix(in oklch, currentColor 55%, transparent);
 }
 .tag[data-kind="STAFFING"] { color: var(--blue); }
 .tag[data-kind="CONFIRM"]  { color: var(--amber); }
@@ -121,16 +145,39 @@
 .confirm-row:first-of-type { border-top: none; }
 .crew-name { font-weight: 500; }
 .crew-meta { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-3); }
+/* Buttons (spec §2): transparent bg, tinted border, accent text, glow;
+   hover fills 18% and steps the glow up. Neutral .btn glows softly cyan. */
 .btn {
   font: inherit; font-size: 12.5px; cursor: pointer; border-radius: 7px;
-  padding: 6px 11px; border: 1px solid var(--panel-line); background: var(--panel-2); color: var(--ink);
+  padding: 6px 11px; border: 1px solid var(--border);
+  background: transparent; color: var(--text);
 }
-.btn:hover { border-color: var(--ink-3); }
-.btn-wa { border-color: color-mix(in oklab, var(--green) 45%, var(--panel-line)); color: var(--green); background: color-mix(in oklab, var(--green) 8%, var(--panel)); }
-.btn-mark { color: var(--ink-2); }
-.state-chip { font-family: var(--font-mono); font-size: 11px; padding: 3px 8px; border-radius: 999px; }
-.state-chip[data-on="true"] { color: var(--green); background: color-mix(in oklab, var(--green) 12%, transparent); }
-.state-chip[data-on="false"] { color: var(--amber); background: color-mix(in oklab, var(--amber) 12%, transparent); }
+.btn:hover:not(:disabled) {
+  border-color: color-mix(in oklch, var(--neon-cyan) 55%, transparent);
+  background: color-mix(in oklch, var(--neon-cyan) 10%, transparent);
+  box-shadow: var(--glow-sm) color-mix(in oklch, var(--neon-cyan) 45%, transparent);
+}
+.btn:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
+.btn-wa {
+  border-color: color-mix(in oklch, var(--neon-green) 45%, transparent);
+  color: var(--neon-green);
+  background: color-mix(in oklch, var(--neon-green) 15%, transparent);
+  box-shadow: var(--glow-sm) color-mix(in oklch, var(--neon-green) 55%, transparent);
+}
+.btn-wa:hover:not(:disabled) {
+  border-color: var(--neon-green);
+  background: color-mix(in oklch, var(--neon-green) 18%, transparent);
+  box-shadow: var(--glow-md) color-mix(in oklch, var(--neon-green) 55%, transparent);
+}
+.btn-mark { color: var(--text-dim); }
+.state-chip {
+  font-family: var(--font-mono); font-size: 11px; padding: 3px 8px; border-radius: 999px;
+  background: color-mix(in oklch, currentColor 15%, transparent);
+  border: 1px solid color-mix(in oklch, currentColor 45%, transparent);
+  box-shadow: var(--glow-sm) color-mix(in oklch, currentColor 55%, transparent);
+}
+.state-chip[data-on="true"] { color: var(--neon-green); }
+.state-chip[data-on="false"] { color: var(--neon-yellow); }
 
 /* events register */
 .event-row {
@@ -157,16 +204,19 @@
 .state .eyebrow { margin-bottom: 8px; }
 .spinner {
   width: 26px; height: 26px; border-radius: 50%;
-  border: 2px solid var(--panel-line); border-top-color: var(--accent);
+  border: 2px solid var(--border); border-top-color: var(--neon-cyan);
+  box-shadow: var(--glow-md) color-mix(in oklch, var(--neon-cyan) 45%, transparent);
   animation: spin 0.8s linear infinite; margin: 0 auto 14px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Error banner — pink-coded chip pattern at block scale (spec §2). */
 .banner {
   border-radius: var(--r-md); padding: 12px 16px; font-size: 14px;
-  border: 1px solid color-mix(in oklab, var(--danger) 40%, var(--panel-line));
-  background: color-mix(in oklab, var(--danger) 10%, var(--panel));
-  color: var(--ink); margin-bottom: 16px;
+  border: 1px solid color-mix(in oklch, var(--neon-pink) 45%, transparent);
+  background: color-mix(in oklch, var(--neon-pink) 12%, transparent);
+  box-shadow: var(--glow-sm) color-mix(in oklch, var(--neon-pink) 45%, transparent);
+  color: var(--text); margin-bottom: 16px;
 }
 
 /* responsive */

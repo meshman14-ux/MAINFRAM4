@@ -20,13 +20,20 @@
   width: 20px; height: 20px; border-radius: 6px; border: 1px solid var(--panel-line);
   background: var(--inset); cursor: pointer; display: grid; place-items: center; font-size: 12px; color: var(--green);
 }
-.task-check[data-done="true"] { background: color-mix(in oklab, var(--green) 20%, var(--panel)); border-color: var(--green); }
+.task-check[data-done="true"] { background: color-mix(in oklch, var(--neon-green) 20%, var(--panel)); border-color: var(--neon-green); box-shadow: var(--glow-sm) color-mix(in oklch, var(--neon-green) 45%, transparent); }
 .task-main { display: flex; flex-direction: column; gap: 2px; }
 .task-title { font-size: 14px; }
 .task-meta { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
-.task-cat-chip { font-family: var(--font-mono); font-size: 10px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--catc); color: var(--catc); }
+.task-cat-chip { font-family: var(--font-mono); font-size: 10px; padding: 3px 8px; border-radius: 999px; border: 1px solid color-mix(in oklch, var(--catc) 45%, transparent); color: var(--catc); background: color-mix(in oklch, var(--catc) 15%, transparent); box-shadow: var(--glow-sm) color-mix(in oklch, var(--catc) 55%, transparent); }
 .task-due { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-3); }
-.task-due[data-overdue="true"] { color: var(--red); font-weight: 600; }
+.task-due[data-overdue="true"] {
+  color: var(--neon-pink); font-weight: 600;
+  padding: 2px 8px; border-radius: 999px;
+  border: 1px solid color-mix(in oklch, var(--neon-pink) 45%, transparent);
+  background: color-mix(in oklch, var(--neon-pink) 15%, transparent);
+  animation: pulse-glow 2.4s ease-in-out infinite;
+  --pulse-c: color-mix(in oklch, var(--neon-pink) 55%, transparent);
+}
 
 @media (max-width: 760px) {
   .task-add { grid-template-columns: 1fr 1fr; }

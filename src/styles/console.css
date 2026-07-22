@@ -17,31 +17,39 @@
 .client-status {
   font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em;
   text-transform: uppercase; padding: 3px 9px; border-radius: 999px;
-  border: 1px solid var(--panel-line); color: var(--ink-2);
+  color: var(--ink-2);
+  border: 1px solid color-mix(in oklch, currentColor 45%, transparent);
+  background: color-mix(in oklch, currentColor 15%, transparent);
+  box-shadow: var(--glow-sm) color-mix(in oklch, currentColor 55%, transparent);
 }
-.client-status[data-status="Active"] { color: var(--green); border-color: color-mix(in oklab, var(--green) 40%, var(--panel-line)); }
-.client-status[data-status="Lead"] { color: var(--amber); border-color: color-mix(in oklab, var(--amber) 40%, var(--panel-line)); }
+.client-status[data-status="Active"] { color: var(--neon-green); }
+.client-status[data-status="Lead"] { color: var(--neon-yellow); }
 .client-meta { color: var(--ink-3); font-size: 13px; }
 
-/* tabs */
+/* tabs — active goes cyan with a glowing underline (spec §2 nav rules) */
 .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--panel-line); margin-bottom: 20px; overflow-x: auto; }
 .tab {
   font: inherit; font-size: 14px; cursor: pointer; white-space: nowrap;
   background: none; border: none; color: var(--ink-3);
   padding: 10px 16px; border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
-.tab:hover { color: var(--ink-2); }
-.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.tab:hover { color: var(--neon-cyan); }
+.tab[aria-selected="true"] {
+  color: var(--neon-cyan); border-bottom-color: var(--neon-cyan);
+  box-shadow: var(--glow-md) color-mix(in oklch, var(--neon-cyan) 40%, transparent);
+}
 
-/* generic table */
+/* generic table (spec §2): surface-2 header with cyan rule, cyan row hover */
 .tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .tbl th {
   text-align: left; font-family: var(--font-mono); font-size: 11px;
   letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3);
-  padding: 8px 12px; border-bottom: 1px solid var(--panel-line); font-weight: 500;
+  padding: 8px 12px; font-weight: 500;
+  background: var(--surface-2);
+  border-bottom: 1px solid color-mix(in oklch, var(--neon-cyan) 55%, transparent);
 }
 .tbl td { padding: 11px 12px; border-bottom: 1px solid var(--panel-line); color: var(--ink); vertical-align: middle; }
-.tbl tr:hover td { background: var(--panel-2); }
+.tbl tr:hover td { background: color-mix(in oklch, var(--neon-cyan) 8%, transparent); }
 .tbl .num { font-family: var(--font-mono); }
 .muted { color: var(--ink-3); }
 
@@ -54,25 +62,46 @@
 .inp:focus, .sel:focus { border-color: var(--accent); outline: none; }
 .row-inline { display: flex; gap: 8px; align-items: center; }
 
+/* Primary (spec §2): transparent bg, cyan border + text, glow-sm;
+   hover fills cyan 18% and steps the glow to md. Destructive = pink, identically. */
 .btn-primary {
-  background: color-mix(in oklab, var(--accent) 22%, var(--panel));
-  border: 1px solid color-mix(in oklab, var(--accent) 55%, var(--panel-line));
-  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--neon-cyan);
+  color: var(--neon-cyan);
+  box-shadow: var(--glow-sm) color-mix(in oklch, var(--neon-cyan) 55%, transparent);
 }
-.btn-primary:hover { background: color-mix(in oklab, var(--accent) 32%, var(--panel)); }
-.btn-danger { color: var(--red); border-color: color-mix(in oklab, var(--danger) 45%, var(--panel-line)); background: transparent; }
-.btn-ghost { background: transparent; }
+.btn-primary:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--neon-cyan) 18%, transparent);
+  box-shadow: var(--glow-md) color-mix(in oklch, var(--neon-cyan) 55%, transparent);
+}
+.btn-primary:disabled { opacity: 0.4; box-shadow: none; }
+.btn-danger {
+  color: var(--neon-pink);
+  border: 1px solid var(--neon-pink);
+  background: transparent;
+  box-shadow: var(--glow-sm) color-mix(in oklch, var(--neon-pink) 55%, transparent);
+}
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--neon-pink) 18%, transparent);
+  box-shadow: var(--glow-md) color-mix(in oklch, var(--neon-pink) 55%, transparent);
+}
+.btn-ghost { background: transparent; box-shadow: none; }
 .btn-sm { padding: 5px 9px; font-size: 12.5px; }
 
 .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
 .toolbar h2 { font-family: var(--font-display); font-size: 18px; font-weight: 600; margin: 0; }
 
-/* status chips reused */
-.chip { font-family: var(--font-mono); font-size: 11px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--panel-line); }
-.chip-green { color: var(--green); border-color: color-mix(in oklab, var(--green) 40%, var(--panel-line)); }
-.chip-amber { color: var(--amber); border-color: color-mix(in oklab, var(--amber) 40%, var(--panel-line)); }
-.chip-red   { color: var(--red);   border-color: color-mix(in oklab, var(--danger) 45%, var(--panel-line)); }
-.chip-blue  { color: var(--blue);  border-color: color-mix(in oklab, var(--blue) 40%, var(--panel-line)); }
+/* status chips — the system-wide chip pattern via currentColor (spec §2) */
+.chip {
+  font-family: var(--font-mono); font-size: 11px; padding: 3px 8px; border-radius: 999px;
+  border: 1px solid color-mix(in oklch, currentColor 45%, transparent);
+  background: color-mix(in oklch, currentColor 15%, transparent);
+  box-shadow: var(--glow-sm) color-mix(in oklch, currentColor 55%, transparent);
+}
+.chip-green { color: var(--neon-green); }
+.chip-amber { color: var(--neon-yellow); }
+.chip-red   { color: var(--neon-pink); animation: pulse-glow 2.4s ease-in-out infinite; --pulse-c: color-mix(in oklch, var(--neon-pink) 55%, transparent); }
+.chip-blue  { color: var(--neon-blue); }
 
 /* staffing grid: unit columns with slots */
 .staffing-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }

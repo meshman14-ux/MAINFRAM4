@@ -7,9 +7,12 @@
 .stat-box { background: var(--panel); border: 1px solid var(--panel-line); border-radius: var(--r-md); padding: 14px 16px; }
 .stat-box .v { font-family: var(--font-display); font-size: 24px; font-weight: 600; }
 .stat-box .k { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin-top: 2px; }
-.stat-box[data-tone="green"] .v { color: var(--green); }
-.stat-box[data-tone="amber"] .v { color: var(--amber); }
-.stat-box[data-tone="red"] .v { color: var(--red); }
+/* stat values wear their meaning's accent with a soft text glow (spec §2) */
+.stat-box[data-tone] .v { text-shadow: 0 0 10px color-mix(in oklch, currentColor 45%, transparent); }
+.stat-box[data-tone="green"] .v { color: var(--neon-green); }
+.stat-box[data-tone="amber"] .v { color: var(--neon-yellow); }
+.stat-box[data-tone="red"] .v { color: var(--neon-pink); }
+.stat-box[data-tone="blue"] .v { color: var(--neon-blue); }
 
 /* warning banner (double-bookings) */
 .warn-banner { background: color-mix(in oklab, var(--danger) 12%, var(--panel)); border: 1px solid color-mix(in oklab, var(--danger) 45%, var(--panel-line)); border-radius: var(--r-md); padding: 14px 16px; margin-bottom: 18px; }
@@ -27,9 +30,11 @@
 
 /* finance table */
 .fin-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.fin-table th { text-align: left; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); padding: 8px 12px; border-bottom: 1px solid var(--panel-line); font-weight: 500; }
+.fin-table th { text-align: left; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); padding: 8px 12px; font-weight: 500; background: var(--surface-2); border-bottom: 1px solid color-mix(in oklch, var(--neon-cyan) 55%, transparent); }
 .fin-table td { padding: 12px; border-bottom: 1px solid var(--panel-line); }
+.fin-table tbody tr:hover td { background: color-mix(in oklch, var(--neon-cyan) 8%, transparent); }
 .fin-table .num { font-family: var(--font-mono); text-align: right; }
 .fin-table tfoot td { font-weight: 600; border-top: 2px solid var(--panel-line); border-bottom: none; }
 .fin-total { font-family: var(--font-display); }
-.fin-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 8px; }
+/* the page sets inline color = the same event colour, so currentColor glows to match */
+.fin-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 8px; box-shadow: 0 0 8px currentColor; }

@@ -23,9 +23,15 @@
 .reg-main .sub { color: var(--ink-3); font-size: 13px; margin-top: 3px; }
 .reg-stats { display: flex; gap: 22px; font-size: 13px; }
 .reg-stats .k { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); display: block; margin-bottom: 2px; }
-.reg-badge { justify-self: end; font-family: var(--font-mono); font-size: 12px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--panel-line); color: var(--ink-2); }
-.reg-badge[data-status="live"] { color: var(--green); border-color: color-mix(in oklab, var(--green) 45%, var(--panel-line)); }
-.reg-badge[data-status="past"] { color: var(--ink-3); }
+.reg-badge {
+  justify-self: end; font-family: var(--font-mono); font-size: 12px; padding: 5px 10px;
+  border-radius: 999px; color: var(--ink-2);
+  border: 1px solid color-mix(in oklch, currentColor 45%, transparent);
+  background: color-mix(in oklch, currentColor 15%, transparent);
+  box-shadow: var(--glow-sm) color-mix(in oklch, currentColor 55%, transparent);
+}
+.reg-badge[data-status="live"] { color: var(--neon-green); }
+.reg-badge[data-status="past"] { color: var(--ink-3); box-shadow: none; }
 
 /* calendar */
 .cal-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
@@ -37,7 +43,10 @@
   background: var(--panel); border: 1px solid var(--panel-line);
 }
 .cal-cell[data-inmonth="false"] { opacity: 0.4; }
-.cal-cell[data-today="true"] { border-color: var(--accent); }
+.cal-cell[data-today="true"] {
+  border-color: var(--neon-cyan);
+  box-shadow: var(--glow-sm) color-mix(in oklch, var(--neon-cyan) 45%, transparent);
+}
 .cal-daynum { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); margin-bottom: 6px; }
 .cal-ev {
   display: block; font-size: 11.5px; padding: 3px 6px; border-radius: 5px; margin-bottom: 4px;
@@ -57,15 +66,38 @@
 .shift-main .nm { font-family: var(--font-display); font-weight: 600; font-size: 15px; }
 .shift-main .sub { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-3); margin-top: 3px; }
 .shift-actions { display: flex; gap: 8px; }
-.btn-confirm { color: var(--green); border-color: color-mix(in oklab, var(--green) 45%, var(--panel-line)); background: color-mix(in oklab, var(--green) 8%, var(--panel)); }
-.btn-decline { color: var(--red); border-color: color-mix(in oklab, var(--danger) 45%, var(--panel-line)); background: transparent; }
+.btn-confirm {
+  color: var(--neon-green); border: 1px solid var(--neon-green); background: transparent;
+  box-shadow: var(--glow-sm) color-mix(in oklch, var(--neon-green) 55%, transparent);
+}
+.btn-confirm:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--neon-green) 18%, transparent);
+  box-shadow: var(--glow-md) color-mix(in oklch, var(--neon-green) 55%, transparent);
+}
+.btn-decline {
+  color: var(--neon-pink); border: 1px solid var(--neon-pink); background: transparent;
+  box-shadow: var(--glow-sm) color-mix(in oklch, var(--neon-pink) 55%, transparent);
+}
+.btn-decline:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--neon-pink) 18%, transparent);
+  box-shadow: var(--glow-md) color-mix(in oklch, var(--neon-pink) 55%, transparent);
+}
 
 .cert-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--panel-line); }
 .cert-row:first-of-type { border-top: none; }
-.cert-state { font-family: var(--font-mono); font-size: 11px; padding: 3px 8px; border-radius: 999px; }
-.cert-state[data-s="ok"] { color: var(--green); }
-.cert-state[data-s="expiring"] { color: var(--amber); }
-.cert-state[data-s="expired"], .cert-state[data-s="missing"] { color: var(--red); }
+.cert-state {
+  font-family: var(--font-mono); font-size: 11px; padding: 3px 8px; border-radius: 999px;
+  border: 1px solid color-mix(in oklch, currentColor 45%, transparent);
+  background: color-mix(in oklch, currentColor 15%, transparent);
+  box-shadow: var(--glow-sm) color-mix(in oklch, currentColor 55%, transparent);
+}
+.cert-state[data-s="ok"] { color: var(--neon-green); }
+.cert-state[data-s="expiring"] { color: var(--neon-yellow); }
+.cert-state[data-s="expired"], .cert-state[data-s="missing"] {
+  color: var(--neon-pink);
+  animation: pulse-glow 2.4s ease-in-out infinite;
+  --pulse-c: color-mix(in oklch, var(--neon-pink) 55%, transparent);
+}
 
 /* availability mini-calendar */
 .avail-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 10px; }
