@@ -29,6 +29,7 @@ import './styles/phase6.css';
 import './styles/pipeline.css';
 import './styles/logistics.css';
 import './styles/tasks.css';
+import './styles/timesheets.css';
 import './styles/portal.css';
 import './styles/auth.css';
 
