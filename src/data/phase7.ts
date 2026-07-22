@@ -42,3 +42,15 @@ export function payrollForEvent(d: OpsData, event: EventRec): PayrollRow[] {
   });
   return rows.sort((a, b) => b.cost - a.cost);
 }
+
+/** Flat CSV of per-event payroll — one line per staff row, ready for a pay run. */
+export function payrollCsv(sections: { eventName: string; rows: PayrollRow[] }[]): string {
+  const lines = sections.flatMap((s) =>
+    s.rows.map((r) => [
+      s.eventName, r.name, String(r.shifts),
+      (Math.round(r.hours * 100) / 100).toString(),
+      (Math.round(r.cost * 100) / 100).toString(),
+    ].join(','))
+  );
+  return ['Event,Staff,Shifts,Hours,Cost', ...lines].join('\n');
+}

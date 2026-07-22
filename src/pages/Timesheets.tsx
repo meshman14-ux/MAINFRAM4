@@ -1,14 +1,21 @@
 import { useMemo, useState } from 'react';
 import { useOpsData } from '../data/useOpsData';
+import { useAuth } from '../data/authContext';
 import type { Client, EventRec, Staff, Timesheet } from '../data/types';
-import { payrollForEvent } from '../data/phase7';
+import { payrollForEvent, payrollCsv } from '../data/phase7';
 
 const fmt = (iso?: string) => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+const clock = (iso?: string) => iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—';
 const gbp = (n: number) => '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const hrs = (n: number) => (Math.round(n * 10) / 10).toLocaleString('en-GB');
 
+const STATUS_COLOR: Record<Timesheet['status'], string> = {
+  draft: 'var(--ink-2)', submitted: 'var(--amber)', approved: 'var(--green)', paid: 'var(--ink-2)',
+};
+
 export default function Timesheets() {
   const { data, ready, error } = useOpsData();
+  const auth = useAuth();
   const [clientId, setClientId] = useState('');
 
   // add-timesheet form state
@@ -36,16 +43,23 @@ export default function Timesheets() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeId, data.meta().updatedAt]
   );
+  const staffName = useMemo(() => new Map(staff.map((s: Staff) => [s.id, s.name])), [staff]);
 
   const payroll = useMemo(
-    () => events.map((e: EventRec) => ({ event: e, rows: payrollForEvent(data, e) })),
+    () => events.map((e: EventRec) => ({
+      event: e,
+      rows: payrollForEvent(data, e),
+      sheets: data.timesheetsForEvent(e.id)
+        .sort((a, b) => (a.workDate || '').localeCompare(b.workDate || '') || a.id.localeCompare(b.id)),
+    })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [events, data.meta().updatedAt]
   );
 
+  const allSheets = payroll.flatMap((p) => p.sheets);
   const totalHours = payroll.reduce((s, p) => s + p.rows.reduce((x, r) => x + r.hours, 0), 0);
   const totalCost = payroll.reduce((s, p) => s + p.rows.reduce((x, r) => x + r.cost, 0), 0);
-  const totalShifts = payroll.reduce((s, p) => s + p.rows.reduce((x, r) => x + r.shifts, 0), 0);
+  const pending = allSheets.filter((t) => t.status === 'submitted').length;
 
   async function addTimesheet() {
     if (!formEventId || !formStaffId || !formDate || !formIn || !formOut || saving) return;
@@ -67,6 +81,24 @@ export default function Timesheets() {
     }
   }
 
+  async function approve(id: string) {
+    const patch: Partial<Timesheet> = { id, status: 'approved', approvedBy: auth.session?.user?.id };
+    await data.save('timesheets', patch);
+  }
+  async function markPaid(id: string) {
+    const patch: Partial<Timesheet> = { id, status: 'paid' };
+    await data.save('timesheets', patch);
+  }
+
+  function exportCsv() {
+    const csv = payrollCsv(payroll.filter((p) => p.rows.length > 0).map((p) => ({ eventName: p.event.name, rows: p.rows })));
+    const b = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(b);
+    const a = document.createElement('a'); a.href = url; a.download = `${activeId}-payroll.csv`;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 120);
+  }
+
   if (error) return <div className="p4"><div className="banner">Couldn't load data: {error}</div></div>;
   if (!ready) return <div className="state"><div><div className="spinner" /><div className="eyebrow">Loading timesheets</div></div></div>;
   if (clients.length === 0) return <div className="p4"><div className="empty-state">No operators yet.</div></div>;
@@ -77,30 +109,31 @@ export default function Timesheets() {
         <select className="client-select" value={activeId} onChange={(e) => setClientId(e.target.value)} aria-label="Operator">
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <span className="client-meta">Hours worked and payroll cost per event (sheet rate ?? staff rate, overtime ×1.5)</span>
+        <span className="client-meta">Hours and payroll per event · submitted → approved → paid</span>
+        <button className="btn btn-primary btn-sm" onClick={exportCsv} disabled={totalCost === 0}>Export .csv</button>
       </div>
 
       <div className="stat-strip">
         <div className="stat-box"><div className="v">{hrs(totalHours)}</div><div className="k">Total hours</div></div>
         <div className="stat-box"><div className="v">{gbp(totalCost)}</div><div className="k">Payroll cost</div></div>
-        <div className="stat-box"><div className="v">{totalShifts}</div><div className="k">Timesheets</div></div>
-        <div className="stat-box"><div className="v">{events.length}</div><div className="k">Events</div></div>
+        <div className="stat-box"><div className="v">{allSheets.length}</div><div className="k">Timesheets</div></div>
+        <div className="stat-box"><div className="v">{pending}</div><div className="k">Awaiting approval</div></div>
       </div>
 
-      <div className="client-bar" style={{ flexWrap: 'wrap', gap: 8 }}>
-        <select className="client-select" value={formEventId} onChange={(e) => setFormEventId(e.target.value)} aria-label="Event">
+      <div className="ts-form">
+        <select value={formEventId} onChange={(e) => setFormEventId(e.target.value)} aria-label="Event">
           <option value="">Event…</option>
           {events.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
         </select>
-        <select className="client-select" value={formStaffId} onChange={(e) => setFormStaffId(e.target.value)} aria-label="Staff">
+        <select value={formStaffId} onChange={(e) => setFormStaffId(e.target.value)} aria-label="Staff">
           <option value="">Staff…</option>
           {staff.map((s: Staff) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
-        <input className="client-select" type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} aria-label="Work date" />
-        <input className="client-select" type="time" value={formIn} onChange={(e) => setFormIn(e.target.value)} aria-label="Clock in" />
-        <input className="client-select" type="time" value={formOut} onChange={(e) => setFormOut(e.target.value)} aria-label="Clock out" />
+        <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} aria-label="Work date" />
+        <input type="time" value={formIn} onChange={(e) => setFormIn(e.target.value)} aria-label="Clock in" />
+        <input type="time" value={formOut} onChange={(e) => setFormOut(e.target.value)} aria-label="Clock out" />
         <button
-          className="btn btn-primary"
+          className="btn-primary"
           disabled={!formEventId || !formStaffId || !formDate || !formIn || !formOut || saving}
           onClick={addTimesheet}
         >
@@ -108,41 +141,57 @@ export default function Timesheets() {
         </button>
       </div>
 
-      {payroll.every((p) => p.rows.length === 0) ? (
+      {allSheets.length === 0 ? (
         <div className="empty-state">No timesheets yet — add the first one above.</div>
       ) : (
-        payroll.filter((p) => p.rows.length > 0).map(({ event, rows }) => (
-          <div key={event.id} style={{ marginTop: 18 }}>
-            <div className="client-meta" style={{ marginBottom: 6 }}>
+        payroll.filter((p) => p.sheets.length > 0).map(({ event, rows, sheets }) => (
+          <div key={event.id} className="ts-section">
+            <div className="ts-head">
               <span className="fin-swatch" style={{ background: data.eventColor(event.id) }} />
               <strong>{event.name}</strong>
-              <span className="mono" style={{ fontSize: 12, marginLeft: 8 }}>
+              <span className="mono" style={{ fontSize: 12 }}>
                 {fmt(event.start)}{event.end && event.end !== event.start ? `–${fmt(event.end)}` : ''}
               </span>
             </div>
-            <table className="fin-table">
+            <table className="fin-table ts-table">
               <thead>
                 <tr>
-                  <th>Staff</th>
-                  <th style={{ textAlign: 'right' }}>Shifts</th>
+                  <th>Date</th><th>Staff</th><th>In–Out</th>
                   <th style={{ textAlign: 'right' }}>Hours</th>
-                  <th style={{ textAlign: 'right' }}>Cost</th>
+                  <th>Status</th><th></th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.staffId}>
-                    <td>{r.name}</td>
-                    <td className="num">{r.shifts}</td>
-                    <td className="num">{hrs(r.hours)}</td>
-                    <td className="num">{gbp(r.cost)}</td>
+                {sheets.map((t) => (
+                  <tr key={t.id}>
+                    <td className="mono" style={{ fontSize: 12 }}>{fmt(t.workDate)}</td>
+                    <td>{staffName.get(t.staffId) ?? t.staffId}</td>
+                    <td className="mono" style={{ fontSize: 12 }}>{clock(t.clockIn)}–{clock(t.clockOut)}</td>
+                    <td className="num">{hrs(data.timesheetHours(t))}</td>
+                    <td>
+                      <span className="pill" style={{ color: STATUS_COLOR[t.status], borderColor: STATUS_COLOR[t.status] }}>
+                        {t.status}{t.overtime ? ' · OT' : ''}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="ts-actions">
+                        {t.status === 'submitted' && (
+                          <button className="btn btn-confirm btn-sm" onClick={() => approve(t.id)}>Approve</button>
+                        )}
+                        {t.status === 'approved' && (
+                          <button className="btn btn-sm" onClick={() => markPaid(t.id)}>Mark paid</button>
+                        )}
+                        <button className="btn btn-danger btn-sm" onClick={() => data.remove('timesheets', t.id)} aria-label="Delete timesheet">✕</button>
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr>
-                  <td className="fin-total" colSpan={3}>Total</td>
-                  <td className="num fin-total">{gbp(rows.reduce((s, r) => s + r.cost, 0))}</td>
+                  <td className="fin-total" colSpan={3}>Payroll ({rows.length} staff)</td>
+                  <td className="num fin-total">{hrs(rows.reduce((s, r) => s + r.hours, 0))}</td>
+                  <td className="num fin-total" colSpan={2}>{gbp(rows.reduce((s, r) => s + r.cost, 0))}</td>
                 </tr>
               </tfoot>
             </table>
@@ -151,7 +200,7 @@ export default function Timesheets() {
       )}
       <p className="muted" style={{ fontSize: 12.5, marginTop: 12 }}>
         Hours use the sheet's explicit hours when set, otherwise clock-out − clock-in − break.
-        New timesheets are created as <span className="mono">submitted</span>.
+        Approving stamps the signed-in user; cost = hours × (sheet rate ?? staff rate) with overtime ×1.5.
       </p>
     </div>
   );
