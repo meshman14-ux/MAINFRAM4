@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import TopBar from './components/TopBar';
 import Home from './pages/Home';
+import CommandCentre from './pages/CommandCentre';
 import Overview from './pages/Overview';
 import OpsConsole from './pages/OpsConsole';
 import ClientAccounts from './pages/ClientAccounts';
@@ -56,6 +57,7 @@ interface RouteDef { page: string; el: React.ReactNode; roles: ('owner'|'manager
 // this just decides which screens the nav offers and guards direct hash access.
 const ROUTES: Record<string, RouteDef> = {
   home:     { page: 'Home',      el: <Home />,          roles: ['owner', 'manager'] },
+  command:  { page: 'Command',   el: <CommandCentre />, roles: ['owner', 'manager'] },
   overview: { page: 'Overview',  el: <Overview />,      roles: ['owner', 'manager'] },
   console:  { page: 'Console',   el: <OpsConsole />,    roles: ['owner', 'manager'] },
   accounts: { page: 'Accounts',  el: <ClientAccounts />, roles: ['owner', 'manager'] },
