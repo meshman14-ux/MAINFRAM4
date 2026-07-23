@@ -74,7 +74,8 @@ const ROUTES: Record<string, RouteDef> = {
   tasks:    { page: 'Tasks',     el: <Tasks />,         roles: ['owner', 'manager'] },
   portal:   { page: 'My Events', el: <ClientPortal />,  roles: ['client'] },
   events:   { page: 'Events',    el: <EventsRegister />, roles: ['owner', 'manager', 'client'] },
-  event:    { page: 'Events',    el: <EventDashboard />, roles: ['owner', 'manager'] },
+  // the data pack is read-only for crew/clients (RLS scopes what they see)
+  event:    { page: 'Events',    el: <EventDashboard />, roles: ['owner', 'manager', 'crew', 'client'] },
   calendar: { page: 'Calendar',  el: <Calendar />,      roles: ['owner', 'manager', 'client'] },
   staff:    { page: 'Staff Hub', el: <StaffHub />,      roles: ['owner', 'manager', 'crew'] },
 };

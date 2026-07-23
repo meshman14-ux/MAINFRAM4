@@ -8,7 +8,8 @@ import { useOpsData } from '../data/useOpsData';
 import type { EventRec, Unit, Staff, Assignment, Movement } from '../data/types';
 import { eventStatus } from '../components/console/eventStatus';
 import { unitColor } from '../components/console/unitTheme';
-import { eventRollup } from '../data/phase12';
+import { eventRollup, generateResearch } from '../data/phase12';
+import { prepPanel, unitCompliance } from '../data/phase13';
 
 const fmt = (iso?: string) => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : 'TBC';
 const gbp = (n: number) => '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -48,6 +49,8 @@ export default function EventDashboard() {
   const movements = data.movementsForEvent(e.id);
   const tasks = data.tasksForEvent(e.id);
   const staffOk = roll.crewTarget > 0 && roll.crewAssigned >= roll.crewTarget;
+  const prep = prepPanel(data, e);
+  const unitTypes = [...new Set(units.map((u) => u.type))];
 
   return (
     <div className="p4" style={{ ['--uc' as string]: col }}>
@@ -88,6 +91,12 @@ export default function EventDashboard() {
 
       {/* KPI strip */}
       <div className="kpi-row">
+        <div className="kpi-chip">
+          <div className="k">Readiness</div>
+          <div className="v" style={{ color: prep.blocked ? 'var(--neon-pink)' : prep.score >= 100 ? 'var(--ok)' : 'var(--neon-cyan)' }}>
+            {prep.blocked ? 'BLOCKED' : `${prep.score}%`}
+          </div>
+        </div>
         <div className="kpi-chip"><div className="k">Units</div><div className="v" style={{ color: 'var(--neon-pink)' }}>{roll.units}</div></div>
         <div className="kpi-chip"><div className="k">Stock low</div><div className="v" style={{ color: roll.stockLow ? 'var(--neon-yellow)' : 'var(--ink-3)' }}>{roll.stockLow}</div></div>
         <div className="kpi-chip"><div className="k">Tasks</div><div className="v" style={{ color: roll.tasksOpen ? 'var(--neon-cyan)' : 'var(--ink-3)' }}>{roll.tasksDone}/{roll.tasksDone + roll.tasksOpen}</div></div>
@@ -144,10 +153,72 @@ export default function EventDashboard() {
         </div>
 
         <div>
-          {/* tasks / readiness */}
+          {/* readiness rollup — the prep panel score per section */}
           <section className="card">
             <div className="card-head">
-              <div className="card-title">Readiness · tasks</div>
+              <div className="card-title">Readiness</div>
+              <a className="btn btn-ghost btn-sm" href="#/readiness" style={{ textDecoration: 'none' }}>Prep panel</a>
+            </div>
+            {prep.blocked && (
+              <div className="comp-issues" style={{ marginBottom: 8 }}>
+                {prep.blockers.slice(0, 3).map((b, i) => <div className="bad" key={i} style={{ fontSize: 12.5, padding: '2px 0' }}>⛔ {b}</div>)}
+              </div>
+            )}
+            <div className="row-inline" style={{ flexWrap: 'wrap', gap: 6 }}>
+              {prep.sections.map((s) => (
+                <a key={s.key} href={s.link} className={`chip ${s.done ? 'chip-green' : s.pct >= 60 ? 'chip-blue' : 'chip-amber'}`}
+                  style={{ textDecoration: 'none', fontSize: 11 }} title={s.items.join(' · ') || 'Nothing outstanding'}>
+                  {s.label} {s.pct}%
+                </a>
+              ))}
+            </div>
+          </section>
+
+          {/* per-unit compliance status */}
+          <section className="card" style={{ marginTop: 16 }}>
+            <div className="card-head">
+              <div className="card-title">Unit compliance</div>
+              <a className="btn btn-ghost btn-sm" href="#/compliance" style={{ textDecoration: 'none' }}>Compliance</a>
+            </div>
+            {units.length === 0 ? (
+              <div className="muted" style={{ fontSize: 13 }}>No units allocated.</div>
+            ) : units.map((u) => {
+              const uc = unitCompliance(u);
+              return (
+                <div className="ov-ev" key={u.id} style={{ ['--evc' as string]: unitColor(u.type) }}>
+                  <span className="ev-swatch" style={{ color: unitColor(u.type) }} />
+                  <span className="ov-ev-name">{u.code}</span>
+                  <span className="mono ov-ev-date">{uc.done}/{uc.total} safety & docs</span>
+                  <span className={`chip ${uc.rag === 'green' ? 'chip-green' : uc.rag === 'amber' ? 'chip-amber' : 'chip-red'}`}>
+                    {uc.rag === 'red' ? `${uc.requiredOpen} required` : uc.rag === 'amber' ? 'open items' : 'clear'}
+                  </span>
+                </div>
+              );
+            })}
+          </section>
+
+          {/* stock research — suggested carry per unit purpose */}
+          {unitTypes.length > 0 && (
+            <section className="card" style={{ marginTop: 16 }}>
+              <div className="card-head">
+                <div className="card-title">Stock research</div>
+                <a className="btn btn-ghost btn-sm" href="#/stock" style={{ textDecoration: 'none' }}>Shopping lists</a>
+              </div>
+              {unitTypes.map((t) => (
+                <div key={t} style={{ marginBottom: 8 }}>
+                  <div className="ev-label" style={{ marginBottom: 4, color: unitColor(t) }}>{t}</div>
+                  <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+                    {generateResearch(t).stock.join(' · ')}
+                  </div>
+                </div>
+              ))}
+            </section>
+          )}
+
+          {/* tasks */}
+          <section className="card" style={{ marginTop: 16 }}>
+            <div className="card-head">
+              <div className="card-title">Tasks</div>
               <a className="btn btn-ghost btn-sm" href="#/tasks" style={{ textDecoration: 'none' }}>All tasks</a>
             </div>
             {tasks.length === 0 ? (
