@@ -33,9 +33,13 @@
   background: transparent; border: 1px solid var(--panel-line); border-radius: 9px;
   color: var(--ink-2); padding: 9px 13px;
 }
-.tab:hover { color: var(--ink); border-color: var(--accent); }
+/* each tab carries its own neon hue via --tc (set inline from TAB_COLORS) */
+.tab:hover { color: var(--tc, var(--ink)); border-color: var(--tc, var(--accent)); }
 .tab[aria-selected="true"] {
-  background: var(--panel-2); border-color: var(--accent); color: var(--ink);
+  background: color-mix(in oklch, var(--tc, var(--accent)) 14%, transparent);
+  border-color: var(--tc, var(--accent));
+  color: var(--tc, var(--ink));
+  box-shadow: var(--glow-sm) color-mix(in oklch, var(--tc, var(--accent)) 50%, transparent);
 }
 
 /* generic table (spec §2): surface-2 header with cyan rule, cyan row hover */
@@ -152,3 +156,104 @@
 .status-pill[data-kind="upcoming"] { color: var(--accent-2); background: oklch(0.62 0.25 295 / 0.14); }
 .status-pill[data-kind="live"]     { color: var(--ok); background: oklch(0.80 0.21 150 / 0.14); }
 .status-pill[data-kind="past"]     { color: var(--ink-3); background: oklch(0.52 0.02 260 / 0.14); }
+
+/* ============================================================
+   Event timeline — chronological neon index at the top of the
+   console. Wrapping rows of bars + glowing connectors; each
+   item hover-expands into a detail card. --uc = event colour.
+   ============================================================ */
+.tl { display: flex; flex-wrap: wrap; align-items: center; row-gap: 6px; margin-bottom: 18px; }
+.tl-item {
+  position: relative; display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px 7px 4px; font: inherit; cursor: pointer;
+  background: transparent; border: none; color: var(--ink-2);
+  border-radius: 9px; transition: background 0.18s;
+}
+.tl-item:hover { background: color-mix(in oklch, var(--uc) 10%, transparent); }
+/* glowing connector to the previous item */
+.tl-item:not(:first-child)::before {
+  content: ''; width: 22px; height: 2px; margin-right: 6px; border-radius: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--uc) 60%, transparent));
+}
+.tl-dot {
+  flex: none; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--uc); box-shadow: 0 0 10px var(--uc);
+}
+.tl-item[data-kind="live"] .tl-dot {
+  animation: pulse-glow 2.4s ease-in-out infinite;
+  --pulse-c: color-mix(in oklch, var(--uc) 65%, transparent);
+}
+.tl-bar {
+  flex: none; width: 26px; height: 8px; border-radius: 4px;
+  background: linear-gradient(90deg,
+    color-mix(in oklch, var(--uc) 85%, transparent),
+    color-mix(in oklch, var(--uc) 25%, transparent));
+  box-shadow: 0 0 10px color-mix(in oklch, var(--uc) 50%, transparent);
+}
+.tl-name { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.tl-date { font-size: 10.5px; color: var(--ink-3); white-space: nowrap; }
+.tl-item[data-kind="past"] { opacity: 0.55; }
+.tl-item[data-kind="past"]:hover, .tl-item:focus-visible { opacity: 1; }
+/* hover-to-expand detail card */
+.tl-pop {
+  position: absolute; top: calc(100% + 6px); left: 4px; z-index: 30;
+  display: flex; flex-direction: column; gap: 3px; min-width: 210px;
+  padding: 11px 14px; border-radius: 11px; text-align: left;
+  background: var(--panel);
+  border: 1px solid color-mix(in oklch, var(--uc) 55%, transparent);
+  box-shadow: var(--glow-md) color-mix(in oklch, var(--uc) 35%, transparent);
+  opacity: 0; transform: translateY(4px); pointer-events: none;
+  transition: opacity 0.18s, transform 0.18s;
+}
+.tl-item:hover .tl-pop, .tl-item:focus-visible .tl-pop { opacity: 1; transform: translateY(0); }
+.tl-pop-name { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.tl-pop-row { font-size: 11.5px; color: var(--ink-2); }
+
+/* ============================================================
+   Unit widgets — one neon card per unit; --uc = unit-type hue
+   ============================================================ */
+.unit-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.unit-card {
+  background: var(--panel); border-radius: 13px; padding: 15px 18px;
+  border: 1px solid color-mix(in oklch, var(--uc, var(--panel-line)) 35%, var(--panel-line));
+  border-left: 3px solid var(--uc, var(--panel-line));
+  transition: transform 0.18s, box-shadow 0.18s;
+}
+.unit-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--glow-md) color-mix(in oklch, var(--uc) 30%, transparent);
+}
+.unit-type-chip { color: var(--uc); text-transform: uppercase; letter-spacing: 0.08em; }
+.unit-name { font-size: 16px; font-weight: 700; margin-top: 9px; }
+.unit-desc { font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
+.unit-check { display: flex; align-items: center; gap: 9px; margin-top: 12px; }
+.unit-check-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--inset); overflow: hidden; }
+.unit-check-bar > div { height: 100%; background: var(--uc); box-shadow: 0 0 8px var(--uc); transition: width 0.3s; }
+.unit-check .mono { font-size: 10.5px; color: var(--ink-3); white-space: nowrap; }
+
+/* "Add details" page: structured notes + checklist */
+.unit-details:hover { transform: none; box-shadow: none; }
+.ud-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+.ud-text { resize: vertical; font-family: inherit; min-height: 64px; }
+.ud-item {
+  display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 10px;
+  border-radius: var(--r-sm); background: var(--inset); border: 1px solid var(--panel-line);
+}
+.ud-item + .ud-item { margin-top: 6px; }
+.ud-item[data-on="true"] .ud-label { text-decoration: line-through; color: var(--ink-3); }
+.ud-tick {
+  flex: none; width: 22px; height: 22px; border-radius: 6px; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 700;
+  border: 1px solid var(--panel-line); background: transparent;
+  color: oklch(0.18 0.02 255);
+}
+.ud-tick[aria-pressed="true"] {
+  background: var(--uc); border-color: var(--uc);
+  box-shadow: 0 0 8px color-mix(in oklch, var(--uc) 55%, transparent);
+}
+.ud-label { flex: 1; font-size: 13.5px; }
+
+@media (max-width: 720px) {
+  .ud-grid { grid-template-columns: 1fr; }
+  .tl-item:not(:first-child)::before { display: none; }
+}
