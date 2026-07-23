@@ -48,5 +48,23 @@ the finding id it closes.
   prefix); the old ~46k-per-ms random space could birthday-collide and `save()`
   upserts, so a collision would have silently overwritten a row.
 
+### Data integrity
+- **M9** — diagnostics/accounts kv are keyed by business name (intentional:
+  they cover prospects before they become real clients, so there's no client
+  id yet). Renaming a saved diagnostic used to leave the old entry orphaned
+  under the previous name. `ClientDiagnostic.saveClient` now migrates the old
+  diagnostics + accounts keys to the new name on rename. Kept name-keying (a
+  full re-key by client id would break the prospect flow); the report's
+  rename-orphan risk is closed at its only live vector.
+
 _Tests: RLS suite 29 → 34; new store-hardening suite (+7: rollback, reset,
 uid); full suite 207 → 219. Build clean._
+
+### Deferred (not in this pass's scope)
+The remaining audit majors are UX/perf/integration, not security or data-loss:
+M3 (realtime disconnect banner), M4 (kv write races beyond the diagnostic
+rename), M5 (moveToStock atomicity), M8/M12 (duplicated crew-gap + alert
+selectors), M11 (echo-window edge case), M13 (Event Docs → real events),
+M14 (past days in timeline), M15 (prepPanel memoisation), M16–M18 (a11y +
+mobile). Tracked in `AUDIT_REPORT.md`; the enhancement ideas are in
+`ENHANCEMENT_BACKLOG.md`.

@@ -221,6 +221,19 @@ export default function ClientDiagnostic() {
     setSaving(true);
     try {
       const next = { ...(data.kvGet<Diagnostics>('diagnostics') || {}), [name]: answers };
+      // Rename-migration (audit M9): diagnostics/accounts are keyed by business
+      // name (intentional — they cover prospects before they're real clients).
+      // When an existing diagnostic is renamed, move its key instead of leaving
+      // an orphan under the old name. Also migrate its accounts entry.
+      if (activeClient && activeClient !== name) {
+        delete next[activeClient];
+        const acc = data.kvGet<Record<string, unknown>>('accounts') || {};
+        if (acc[activeClient] !== undefined && acc[name] === undefined) {
+          const nextAcc = { ...acc, [name]: acc[activeClient] };
+          delete nextAcc[activeClient];
+          await data.kvSet('accounts', nextAcc);
+        }
+      }
       await data.kvSet('diagnostics', next);
       setActiveClient(name);
     } finally {
