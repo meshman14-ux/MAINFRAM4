@@ -10,6 +10,7 @@ import ClientProposal from './pages/ClientProposal';
 import ImplementationPlan from './pages/ImplementationPlan';
 import EventsRegister from './pages/EventsRegister';
 import EventDashboard from './pages/EventDashboard';
+import EventDocs from './pages/EventDocs';
 import Calendar from './pages/Calendar';
 import StaffHub from './pages/StaffHub';
 import Callouts from './pages/Callouts';
@@ -68,6 +69,7 @@ const ROUTES: Record<string, RouteDef> = {
   onboard:  { page: 'Onboard',   el: <Onboarding />,    roles: ['owner', 'manager'] },
   readiness:{ page: 'Readiness', el: <Readiness />,     roles: ['owner', 'manager'] },
   compliance:{ page: 'Compliance', el: <Compliance />,  roles: ['owner', 'manager'] },
+  eventdocs: { page: 'Event Docs', el: <EventDocs />,   roles: ['owner', 'manager'] },
   stock:    { page: 'Stock',     el: <StockOrdering />, roles: ['owner', 'manager'] },
   finance:  { page: 'Finance',   el: <Finance />,       roles: ['owner', 'manager'] },
   timesheets: { page: 'Timesheets', el: <Timesheets />, roles: ['owner', 'manager'] },

@@ -20,6 +20,7 @@ const PRIMARY: { label: string; route: string; roles: Role[] }[] = [
 const MORE: { label: string; route: string; roles: Role[] }[] = [
   { label: 'Readiness',  route: '#/readiness',  roles: ['owner', 'manager'] },
   { label: 'Compliance', route: '#/compliance', roles: ['owner', 'manager'] },
+  { label: 'Event Docs', route: '#/eventdocs',  roles: ['owner', 'manager'] },
   { label: 'Stock',      route: '#/stock',      roles: ['owner', 'manager'] },
   { label: 'Finance',    route: '#/finance',    roles: ['owner', 'manager'] },
   { label: 'Timesheets', route: '#/timesheets', roles: ['owner', 'manager'] },
