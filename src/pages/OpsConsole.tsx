@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useOpsData } from '../data/useOpsData';
 import type { Client } from '../data/types';
 import { EventsTab } from '../components/console/EventsTab';
+import { eventStatus } from '../components/console/eventStatus';
 import { UnitsTab } from '../components/console/UnitsTab';
 import { StaffTab } from '../components/console/StaffTab';
 import { StockTab } from '../components/console/StockTab';
@@ -24,6 +25,18 @@ export default function OpsConsole() {
   // Default to the first client once loaded.
   const activeId = clientId || clients[0]?.id || '';
   const client = clients.find((c) => c.id === activeId) || null;
+
+  // KPI chips — same status logic as the Events tab cards (shared helper).
+  const kpis = useMemo(() => {
+    if (!ready || !activeId) return { total: 0, upcoming: 0, live: 0 };
+    const statuses = data.eventsForClient(activeId).map((e) => eventStatus(e).kind);
+    return {
+      total: statuses.length,
+      upcoming: statuses.filter((k) => k === 'upcoming').length,
+      live: statuses.filter((k) => k === 'live').length,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, activeId, data.meta().updatedAt]);
 
   if (error) {
     return <div className="console"><div className="banner">Couldn't load data: {error}</div></div>;
@@ -56,6 +69,12 @@ export default function OpsConsole() {
         </select>
         <span className="client-status" data-status={client.status}>{client.status}</span>
         {client.contact && <span className="client-meta">{client.contact}{client.phone ? ` · ${client.phone}` : ''}</span>}
+      </div>
+
+      <div className="kpi-row">
+        <div className="kpi-chip"><div className="k">Events</div><div className="v" style={{ color: 'var(--ink)' }}>{kpis.total}</div></div>
+        <div className="kpi-chip"><div className="k">Upcoming</div><div className="v" style={{ color: 'var(--accent-2)' }}>{kpis.upcoming}</div></div>
+        <div className="kpi-chip"><div className="k">Live now</div><div className="v" style={{ color: kpis.live > 0 ? 'var(--ok)' : 'var(--ink-3)' }}>{kpis.live}</div></div>
       </div>
 
       <div className="tabs" role="tablist">

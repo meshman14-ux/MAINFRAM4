@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { OpsData } from '../../data/opsData';
 import type { EventRec, ScheduleDay } from '../../data/types';
+import { eventStatus } from './eventStatus';
 
 interface Props { data: OpsData; clientId: string; }
 
@@ -46,29 +47,50 @@ export function EventsTab({ data, clientId }: Props) {
       {events.length === 0 ? (
         <div className="empty-state">No events yet. Create the first one.</div>
       ) : (
-        <table className="tbl">
-          <thead>
-            <tr><th>Event</th><th>Location</th><th>Dates</th><th>Call</th><th>Units</th><th>Schedule</th><th></th></tr>
-          </thead>
-          <tbody>
-            {events.map((e) => (
-              <tr key={e.id}>
-                <td><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: data.eventColor(e.id), marginRight: 8 }} />{e.name}</td>
-                <td className="muted">{e.loc || '—'}</td>
-                <td className="num">{fmt(e.start)}{e.end && e.end !== e.start ? `–${fmt(e.end)}` : ''}</td>
-                <td className="num">{e.callTime || '—'}</td>
-                <td className="num">{data.unitsForEvent(e).length}</td>
-                <td className="num">{(e.schedule || []).length} days</td>
-                <td>
-                  <div className="row-inline">
-                    <button className="btn btn-ghost btn-sm" onClick={() => setEditing(e)}>Edit</button>
-                    <button className="btn btn-danger btn-sm" onClick={() => del(e.id)}>Del</button>
+        events.map((e) => {
+          const col = data.eventColor(e.id);
+          const st = eventStatus(e);
+          const assigned = data.assignmentsForEvent(e.id).length;
+          const target = Object.values(data.staffingFor(e)).reduce((n, v) => n + v, 0);
+          const staffOk = target > 0 && assigned >= target;
+          return (
+            <div className="ev-card" key={e.id} style={{ borderLeft: `3px solid ${col}` }}>
+              <div className="ev-head">
+                <span className="ev-swatch" style={{ color: col }} />
+                <span className="ev-name">{e.name}</span>
+                <span className="status-pill" data-kind={st.kind}>{st.label}</span>
+                <span className="row-inline" style={{ marginLeft: 'auto' }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setEditing(e)}>Edit</button>
+                  <button className="btn btn-danger btn-sm" onClick={() => del(e.id)}>Del</button>
+                </span>
+              </div>
+              <div className="ev-grid">
+                <div className="ev-field">
+                  <div className="ev-label">Dates</div>
+                  <div className="fv mono">{fmt(e.start)}{e.end && e.end !== e.start ? `–${fmt(e.end)}` : ''}</div>
+                  <div className="fs">{e.callTime ? `Crew call ${e.callTime}` : `${(e.schedule || []).length} scheduled days`}</div>
+                </div>
+                <div className="ev-field">
+                  <div className="ev-label">Location</div>
+                  <div className="fv">{e.loc || '—'}</div>
+                  {e.notes && <div className="fs">{e.notes}</div>}
+                </div>
+                <div className="ev-field">
+                  <div className="ev-label">Units on site</div>
+                  <div className="fv mono">{data.unitsForEvent(e).length}</div>
+                  <div className="fs">{(e.schedule || []).length} schedule days</div>
+                </div>
+                <div className="ev-field">
+                  <div className="ev-label">Staff</div>
+                  <div className="fv mono" style={{ color: staffOk ? 'var(--ok)' : 'var(--warn)' }}>
+                    {assigned} / {target}
                   </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  <div className="fs">{staffOk ? 'fully staffed' : 'assigned / target'}</div>
+                </div>
+              </div>
+            </div>
+          );
+        })
       )}
 
       {editing && (
