@@ -78,6 +78,11 @@
   border-color: var(--neon-cyan);
   box-shadow: var(--glow-sm) color-mix(in oklch, var(--neon-cyan) 45%, transparent);
 }
+.cal-cell[data-picked="true"] {
+  border-color: var(--neon-pink);
+  box-shadow: var(--glow-md) color-mix(in oklch, var(--neon-pink) 40%, transparent);
+}
+.cal-cell[data-inmonth="true"]:hover { border-color: var(--ink-3); }
 .cal-daynum { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); margin-bottom: 6px; }
 .cal-ev {
   display: block; font-size: 11.5px; padding: 3px 6px; border-radius: 5px; margin-bottom: 4px;

@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { OpsData } from '../src/data/opsData';
 import type { OpsState, Staff, Unit } from '../src/data/types';
-import { personalRag, unitCompliance, complianceRollup, calloutRequests, calloutFill, prepPanel } from '../src/data/phase13';
+import { personalRag, unitCompliance, complianceRollup, calloutRequests, calloutFill, prepPanel, dayItinerary } from '../src/data/phase13';
 import type { EventRec } from '../src/data/types';
 
 const future = (days: number) => {
@@ -15,7 +15,11 @@ function seed(): OpsState {
     meta: { version: 1, updatedAt: Date.now() },
     clients: { C001: { id: 'C001', name: 'JP Events', status: 'Active' } },
     events: {
-      E001: { id: 'E001', clientId: 'C001', name: 'Latitude', start: '2026-07-23', end: '2026-07-26' },
+      E001: {
+        id: 'E001', clientId: 'C001', name: 'Latitude', start: '2026-07-23', end: '2026-07-26',
+        callTime: '07:00',
+        schedule: [{ id: 'd1', date: '2026-07-24', phase: 'Trading Day', open: '11:00', close: '23:00' }],
+      },
       // E002 carries explicit skill requests set by the operator
       E002: {
         id: 'E002', clientId: 'C001', name: 'Cardiff', start: '2026-08-15',
@@ -26,7 +30,10 @@ function seed(): OpsState {
       P1: { id: 'P1', eventId: 'E001', unitId: 'U001', staffId: 'S002', status: 'applied' },
     },
     kv: {}, availability: {}, pipeline: {},
-    movements: {}, eventTasks: {}, timesheets: {}, vehicles: {}, invoices: {},
+    movements: {
+      M1: { id: 'M1', eventId: 'E001', unitId: 'U001', driverId: 'S001', departDate: '2026-07-23', departTime: '05:30', tow: true, status: 'planned' },
+    },
+    eventTasks: {}, timesheets: {}, vehicles: {}, invoices: {},
     expenses: {}, documents: {}, shoppingLists: {},
     assignments: {
       A1: { id: 'A1', eventId: 'E001', unitId: 'U001', staffId: 'S001', area: 'Bar', confirmed: true },
@@ -146,6 +153,34 @@ describe('prepPanel (readiness with hard gate)', () => {
     const crew = panel.sections.find((s) => s.key === 'crew')!;
     expect(crew.items.join(' ')).toContain('unfilled');
     expect(crew.link).toBe('#/callouts');
+  });
+});
+
+describe('dayItinerary', () => {
+  const d = store();
+  it('collects calls, journeys and unit status for a day, time-ordered', () => {
+    const it = dayItinerary(d, '2026-07-23');
+    const kinds = it.map((x) => x.kind);
+    expect(kinds).toContain('call');
+    expect(kinds).toContain('journey');
+    expect(kinds).toContain('units');
+    // journey departs 05:30 — before the 07:00 crew call
+    expect(it[0].kind).toBe('journey');
+    expect(it[0].sub).toContain('+20%');
+    expect(it[1].kind).toBe('call');
+  });
+  it('includes schedule phases on their date', () => {
+    const it = dayItinerary(d, '2026-07-24');
+    const phase = it.find((x) => x.kind === 'phase');
+    expect(phase?.label).toContain('Trading Day');
+    expect(phase?.sub).toContain('11:00–23:00');
+  });
+  it('personal itinerary only shows the crew member their own day', () => {
+    const mine = dayItinerary(d, '2026-07-23', 'S001');
+    expect(mine.some((x) => x.kind === 'journey')).toBe(true);      // they drive M1
+    expect(mine.some((x) => x.label.includes('Your unit'))).toBe(true);
+    // S003 has no assignments or journeys — empty day
+    expect(dayItinerary(d, '2026-07-23', 'S003')).toHaveLength(0);
   });
 });
 

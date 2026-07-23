@@ -248,6 +248,89 @@ export function prepPanel(d: OpsData, e: EventRec): PrepPanel {
   return { sections, score, blocked, blockers, ready: !blocked && sections.every((s) => s.done) };
 }
 
+/* ---------------- calendar day itinerary (module 6) ---------------- */
+
+export interface ItineraryEntry {
+  time?: string;             // 'HH:MM' — timeless entries sort last
+  kind: 'call' | 'journey' | 'phase' | 'units' | 'flag';
+  label: string;
+  sub?: string;
+  eventId: string;
+  eventName: string;
+  color: string;
+}
+
+/** Everything happening on one date, across ALL events, in time order.
+    Pass staffId for a crew member's personal itinerary — only their
+    events, their journeys and their own unit. */
+export function dayItinerary(d: OpsData, date: string, staffId?: string): ItineraryEntry[] {
+  const out: ItineraryEntry[] = [];
+  const events = d.all<EventRec>('events').filter((e) => {
+    if (!e.start) return false;
+    if (!(e.start <= date && date <= (e.end || e.start))) return false;
+    if (staffId) {
+      const mine = d.assignmentsForEvent(e.id).some((a) => a.staffId === staffId)
+        || d.movementsForEvent(e.id).some((m) => m.driverId === staffId);
+      if (!mine) return false;
+    }
+    return true;
+  });
+
+  for (const e of events) {
+    const color = d.eventColor(e.id);
+    const base = { eventId: e.id, eventName: e.name, color };
+
+    if (e.callTime) out.push({ ...base, time: e.callTime, kind: 'call', label: `Crew call — ${e.name}`, sub: e.loc });
+
+    const day = (e.schedule || []).find((s) => s.date === date);
+    if (day) {
+      out.push({
+        ...base, time: day.open, kind: 'phase',
+        label: `${day.phase} — ${e.name}`,
+        sub: [day.open && day.close ? `${day.open}–${day.close}` : '', day.note || ''].filter(Boolean).join(' · ') || undefined,
+      });
+    }
+
+    for (const m of d.movementsForEvent(e.id)) {
+      if (m.departDate !== date) continue;
+      if (staffId && m.driverId !== staffId) continue;
+      const unit = m.unitId ? d.get<Unit>('units', m.unitId) : null;
+      const driver = d.get<Staff>('staff', m.driverId);
+      out.push({
+        ...base, time: m.departTime, kind: 'journey',
+        label: `${unit ? (unit.code || unit.type) : 'Support van'} departs — ${driver?.name ?? '—'}`,
+        sub: m.tow ? 'towing · allow +20% journey time' : undefined,
+      });
+    }
+
+    if (staffId) {
+      const mine = d.assignmentsForEvent(e.id).find((a) => a.staffId === staffId);
+      const unit = mine ? d.get<Unit>('units', mine.unitId) : null;
+      if (unit) out.push({ ...base, kind: 'units', label: `Your unit: ${unit.code} · ${unit.name}`, sub: mine!.area });
+    } else {
+      const units = d.unitsForEvent(e);
+      const assigns = d.assignmentsForEvent(e.id);
+      const target = Object.values(d.staffingFor(e)).reduce((n: number, v) => n + (v as number), 0);
+      out.push({
+        ...base, kind: 'units',
+        label: `${units.length} unit${units.length !== 1 ? 's' : ''} active — ${e.name}`,
+        sub: `${assigns.length}/${target} crew · ${assigns.filter((a) => a.confirmed).length} confirmed`,
+      });
+      if (e.start === date) {
+        const prep = prepPanel(d, e);
+        if (prep.blocked) out.push({ ...base, kind: 'flag', label: `Readiness BLOCKED — ${e.name}`, sub: prep.blockers[0] });
+      }
+    }
+  }
+
+  return out.sort((a, b) => {
+    if (a.time && b.time) return a.time.localeCompare(b.time) || a.eventName.localeCompare(b.eventName);
+    if (a.time) return -1;
+    if (b.time) return 1;
+    return a.kind === 'flag' ? 1 : b.kind === 'flag' ? -1 : a.eventName.localeCompare(b.eventName);
+  });
+}
+
 /** Both levels rolled up for the Information Hub header. */
 export function complianceRollup(d: OpsData, clientId: string): {
   unitOpen: number; unitRequiredOpen: number; crewProblems: number; crewRed: number;
