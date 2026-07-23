@@ -3,7 +3,7 @@
    checklists (stock/paperwork/equipment/consumables/safety/operational),
    assigned stock, and linked events / staff / tasks. Opened from the Console
    unit widgets, Staff and the Timeline. */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useOpsData } from '../data/useOpsData';
 import type {
   Unit, Client, Staff, EventRec, Task, UnitChecklist, ChecklistKind, UnitChecklistItem, TaskStatus,
@@ -224,6 +224,19 @@ function AIPanel({ data, unit }: { data: ReturnType<typeof useOpsData>['data']; 
       if (result) await data.save<Partial<import('../data/types').UnitInsight>>('unitInsights', result);
     } finally { setBusy(false); }
   }
+
+  // Auto-analyse on open when the latest run is stale (>24h) or missing, once
+  // per unit per mount, so trends build up from normal use.
+  const autoRan = useRef<string | null>(null);
+  useEffect(() => {
+    if (autoRan.current === unit.id || busy) return;
+    const last = insight?.generatedAt ? Date.parse(insight.generatedAt) : 0;
+    if (Date.now() - last > 24 * 60 * 60 * 1000) {
+      autoRan.current = unit.id;
+      void run();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unit.id, insight?.generatedAt]);
 
   return (
     <div className="card" style={{ marginBottom: 16, background: 'linear-gradient(135deg, color-mix(in oklch, var(--accent-2) 12%, transparent), color-mix(in oklch, var(--accent) 7%, transparent))' }}>

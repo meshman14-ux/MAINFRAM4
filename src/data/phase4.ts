@@ -135,6 +135,7 @@ export interface MyShift {
   eventName: string;
   eventStart?: string;
   eventEnd?: string;
+  unitId: string;
   unitCode: string;
   unitName: string;
   area?: string;
@@ -153,6 +154,7 @@ export function myShifts(d: OpsData, staffId: string, today = todayISO()): MyShi
       eventName: e?.name ?? a.eventId,
       eventStart: e?.start,
       eventEnd: e?.end,
+      unitId: a.unitId,
       unitCode: u?.code ?? '',
       unitName: u?.name ?? '',
       area: a.area,

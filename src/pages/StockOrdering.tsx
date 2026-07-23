@@ -77,7 +77,7 @@ export default function StockOrdering() {
                 <div className="ev-head">
                   <span className="ev-swatch" style={{ color: col }} />
                   <span className="chip unit-type-chip">{unit?.type || 'Unit'}</span>
-                  <span className="mono" style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-3)' }}>{lines[0].unitCode}</span>
+                  <a className="mono" href={`#/unit/${unitId}`} style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--accent)', textDecoration: 'none' }}>{lines[0].unitCode} ↗</a>
                 </div>
                 <div className="unit-name">{lines[0].unitName || lines[0].unitCode}</div>
                 <div className="unit-desc">{lines.length} line{lines.length !== 1 ? 's' : ''} below par</div>

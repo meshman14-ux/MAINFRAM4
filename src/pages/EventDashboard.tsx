@@ -122,7 +122,7 @@ export default function EventDashboard() {
               return (
                 <div className="ov-ev" key={u.id} style={{ ['--evc' as string]: uc }}>
                   <span className="ev-swatch" style={{ color: uc }} />
-                  <span className="ov-ev-name">{u.code} · {u.name}</span>
+                  <span className="ov-ev-name"><a href={`#/unit/${u.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>{u.code} · {u.name}</a></span>
                   <span className="mono ov-ev-date">{crew.length}/{u.crew} crew</span>
                   <span className="mono ov-ev-date">{cl.length ? `${done}/${cl.length} checks` : 'no checklist'}</span>
                 </div>
@@ -187,7 +187,7 @@ export default function EventDashboard() {
               return (
                 <div className="ov-ev" key={u.id} style={{ ['--evc' as string]: unitColor(u.type) }}>
                   <span className="ev-swatch" style={{ color: unitColor(u.type) }} />
-                  <span className="ov-ev-name">{u.code}</span>
+                  <span className="ov-ev-name"><a href={`#/unit/${u.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>{u.code}</a></span>
                   <span className="mono ov-ev-date">{uc.done}/{uc.total} safety & docs</span>
                   <span className={`chip ${uc.rag === 'green' ? 'chip-green' : uc.rag === 'amber' ? 'chip-amber' : 'chip-red'}`}>
                     {uc.rag === 'red' ? `${uc.requiredOpen} required` : uc.rag === 'amber' ? 'open items' : 'clear'}

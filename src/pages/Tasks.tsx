@@ -12,6 +12,7 @@ const fmtDue = (iso?: string) => iso ? new Date(iso + 'T00:00:00').toLocaleDateS
 export default function Tasks() {
   const { data, ready, error } = useOpsData();
   const [clientId, setClientId] = useState('');
+  const [view, setView] = useState<'events' | 'board'>('events');
   const [filter, setFilter] = useState<TaskCategory | 'All'>('All');
   const [title, setTitle] = useState('');
   const [eventId, setEventId] = useState('');
@@ -76,8 +77,15 @@ export default function Tasks() {
       </div>
 
       <ProgressChart data={data} clientId={activeId} />
-      <UnitTaskBoard data={data} clientId={activeId} />
 
+      <div className="segmented" style={{ margin: '14px 0 4px' }}>
+        <button aria-pressed={view === 'events'} onClick={() => setView('events')}>Event tasks</button>
+        <button aria-pressed={view === 'board'} onClick={() => setView('board')}>Ops board</button>
+      </div>
+
+      {view === 'board' && <UnitTaskBoard data={data} clientId={activeId} />}
+
+      {view === 'events' && <>
       <div className="task-tabs">
         <button className="task-tab" style={{ ['--tabc' as string]: 'var(--ink-2)' }} aria-pressed={filter === 'All'} onClick={() => setFilter('All')}>
           All<span className="n">{summary.open}</span>
@@ -125,6 +133,7 @@ export default function Tasks() {
           );
         })
       )}
+      </>}
     </div>
   );
 }

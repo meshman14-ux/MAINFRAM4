@@ -75,7 +75,7 @@ export default function StaffHub() {
                   <span className="shift-accent" />
                   <div className="shift-main">
                     <div className="nm">{s.eventName}</div>
-                    <div className="sub">{s.unitCode} · {s.unitName} · {fmt(s.eventStart)}{s.eventEnd && s.eventEnd !== s.eventStart ? `–${fmt(s.eventEnd)}` : ''}{s.area ? ` · ${s.area}` : ''}</div>
+                    <div className="sub"><a href={`#/unit/${s.unitId}`} style={{ color: 'inherit' }}>{s.unitCode} · {s.unitName}</a> · {fmt(s.eventStart)}{s.eventEnd && s.eventEnd !== s.eventStart ? `–${fmt(s.eventEnd)}` : ''}{s.area ? ` · ${s.area}` : ''}</div>
                   </div>
                   <div className="shift-actions">
                     {s.confirmed ? (

@@ -212,7 +212,7 @@ export default function EventGantt({ onOpenEvent }: { onOpenEvent?: (id: string)
                         const uJourneys = journeys.filter((m) => m.unitId === u.id || (!m.unitId && units.length === 1));
                         return (
                           <div key={u.id} style={{ position: 'relative', height: 30, marginBottom: 3 }}>
-                            <span className="mono" style={{ position: 'absolute', left: 0, top: 8, fontSize: 9.5, color: uc, width: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.code}</span>
+                            <a className="mono" href={`#/unit/${u.id}`} title={`Open ${u.code} dashboard`} style={{ position: 'absolute', left: 0, top: 8, fontSize: 9.5, color: uc, width: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'none' }}>{u.code}</a>
                             <div style={{ position: 'absolute', left: 70, right: 0, top: 0, bottom: 0 }}>
                               <div role="button" tabIndex={0} onClick={() => open(e.id)} onKeyDown={(k) => { if (k.key === 'Enter') open(e.id); }}
                                 title={`${u.code} · ${u.name}\ncrew ${crew.length}/${u.crew} (${conf} confirmed)\n${phases.map((p) => `${p.label} ${toHHMM(p.from)}–${toHHMM(p.to)}`).join('\n')}${uJourneys.length ? `\ndeparts ${uJourneys[0].departTime || 'TBC'}` : ''}`}

@@ -18,7 +18,8 @@ you have already run is safe.
 | 10 | `09_audit_hardening.sql` | security fixes from the audit: `mf_kv` reads operator-only, remove crew `mf_staff` self-update, `mf_staff_client` name/role view for clients, timesheet-rate lock trigger | ⬜ run this |
 | 11 | `10_timeline.sql` | Triple Timeline: `mf_events.category`/`.priority` columns, `mf_widget_layouts` (per-user layout prefs) + RLS + realtime, and the year/month/day/overlap/sort/filter RPCs | ⬜ run this |
 | 12 | `11_unit_ai.sql` | Unit Dashboard + AI: `mf_tasks`, `mf_unit_checklists`, `mf_unit_insights` (+ RLS: operator all, crew read own units; + realtime) and the `analyze_unit(text)` context RPC | ⬜ run this |
-| 13 | `12_combined.sql` | **NEW** — combined-build deltas: `mf_pal_branches` + `mf_units.branch_id` (PAL branch association) and the `analyze_unit_ai(text)` RPC (analyze_unit + branch) | ⬜ run this |
+| 13 | `12_combined.sql` | combined-build deltas: `mf_pal_branches` + `mf_units.branch_id` (PAL branch association) and the `analyze_unit_ai(text)` RPC (analyze_unit + branch) | ⬜ run this |
+| 14 | `13_crew_checklists.sql` | **NEW** — crew can UPDATE `mf_unit_checklists` for units they're assigned to (tick items on site); insert/delete stay operator-only | ⬜ run this |
 
 After running a migration, no app redeploy is needed — the running app picks
 the new tables up on next load.
