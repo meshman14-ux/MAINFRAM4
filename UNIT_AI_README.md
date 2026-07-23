@@ -30,8 +30,10 @@ is wired into the store like every other entity.
 - `gatherUnitContext(store, unitId)` — assembles stock, low-stock, documents,
   flagged docs, tasks, checklists, linked events and crew into one payload.
 - `scoreUnit(ctx)` — **deterministic** Health (condition: stock, docs, safety,
-  tasks) and Readiness (prepared-to-trade: checklist completion, crew,
-  paperwork) scores, 0–100. Always available, no model needed.
+  tasks) and Readiness (prepared-to-trade) scores, 0–100. Always available, no
+  model needed. Readiness is **crew-dominant** (crew 45% / checklist 30% /
+  paperwork 15% / stock 10%) — an unstaffed unit is never "ready" however
+  complete its checklists.
 - `ruleInsights(ctx)` — **deterministic** tone-coded insight chips (danger for
   open safety items / expired docs, warn for low stock / paperwork / crew
   short, info for open tasks). Always available.
@@ -45,6 +47,18 @@ The **AI panel** on the dashboard shows both scores as conic gauges, the
 insight chips (tone-coded), a Refresh button, and daily/weekly/monthly summary
 tabs. It renders live deterministic scores/insights immediately; Refresh adds
 the AI summaries and persists them (with realtime).
+
+Refinements (post-quiz decisions):
+- **History, not overwrite** — each Refresh appends a new `mf_unit_insights`
+  row; `insightsForUnit(uid)` returns the full run history (newest first) and
+  the panel draws a health/readiness **trend sparkline** once ≥2 runs exist.
+- **Offline badge** — when `window.claude` is absent (e.g. the deployed Vercel
+  site) the panel shows an "AI model offline · rule-based" chip so operators
+  know why the prose is terse; scores/insights are unaffected.
+- **Task models stay separate, cross-linked** — `mf_tasks` (unit/ops work)
+  and `mf_event_tasks` (event run-sheets) coexist; the dashboard shows the
+  linked events' run-sheet tasks read-only, and unit tasks can carry an
+  `event_id`.
 
 Server RPC `analyze_unit(p_unit_id text)` (SECURITY INVOKER) assembles the same
 context server-side for callers that want it; the LLM call stays client-side.

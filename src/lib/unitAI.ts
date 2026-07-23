@@ -83,10 +83,12 @@ export function scoreUnit(ctx: UnitContext): UnitScores {
     0.10 * (ctx.openTasks.length === 0 ? 1 : Math.max(0, 1 - ctx.openTasks.length / 8))
   ));
 
-  // Readiness: prepared to trade. Checklist completion + crew + no paperwork gaps.
+  // Readiness: prepared to trade. Crew coverage dominates — an unstaffed unit is
+  // never "ready" regardless of how complete its checklists are — then checklist
+  // completion, then no paperwork gaps, then stock.
   const readiness = Math.round(100 * (
-    0.45 * cc.pct +
-    0.30 * crewPct +
+    0.45 * crewPct +
+    0.30 * cc.pct +
     0.15 * (cc.paperworkOpen === 0 ? 1 : Math.max(0, 1 - cc.paperworkOpen / 5)) +
     0.10 * stockPct
   ));

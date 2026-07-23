@@ -125,15 +125,43 @@ export default function UnitDashboard() {
           </section>
 
           <TasksCard data={data} unit={unit} tasks={tasks} />
+          <EventTasksCard data={data} events={events} />
         </div>
       </div>
     </div>
   );
 }
 
+/* ---- read-only view of run-sheet tasks from this unit's linked events ---- */
+function EventTasksCard({ data, events }: { data: ReturnType<typeof useOpsData>['data']; events: EventRec[] }) {
+  const rows = events.flatMap((e) =>
+    data.tasksForEvent(e.id).map((t) => ({ t, eventName: e.name, eventId: e.id }))
+  );
+  if (rows.length === 0) return null;
+  return (
+    <section className="card" style={{ marginTop: 16 }}>
+      <div className="card-head">
+        <div className="card-title">Event run-sheet tasks</div>
+        <a className="btn btn-ghost btn-sm" href="#/tasks" style={{ textDecoration: 'none' }}>Tasks</a>
+      </div>
+      <div className="muted" style={{ fontSize: 11.5, marginBottom: 6 }}>From this unit's linked events (read-only — manage on the event).</div>
+      {rows.slice(0, 12).map(({ t, eventName, eventId }) => (
+        <a className="ov-ev" key={t.id} href={`#/event/${eventId}`} style={{ textDecoration: 'none', ['--evc' as string]: data.eventColor(eventId) }}>
+          <span className={`chip ${t.done ? 'chip-green' : 'chip-amber'}`}>{t.done ? 'done' : 'open'}</span>
+          <span className="ov-ev-name" style={t.done ? { textDecoration: 'line-through', color: 'var(--ink-3)' } : undefined}>{t.title}</span>
+          <span className="mono ov-ev-date" style={{ color: 'var(--ink-3)' }}>{eventName}</span>
+        </a>
+      ))}
+    </section>
+  );
+}
+
 /* ---- AI analysis panel ---- */
+const aiModelAvailable = () => typeof (window as any).claude?.complete === 'function';
+
 function AIPanel({ data, unit }: { data: ReturnType<typeof useOpsData>['data']; unit: Unit }) {
-  const insight = data.insightForUnit(unit.id);
+  const history = data.insightsForUnit(unit.id);   // newest first — full analysis trend
+  const insight = history[0] || null;
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<'daily' | 'weekly' | 'monthly'>('daily');
 
@@ -148,12 +176,14 @@ function AIPanel({ data, unit }: { data: ReturnType<typeof useOpsData>['data']; 
   const readiness = insight?.readinessScore ?? live?.scores.readiness ?? 0;
   const chips = insight?.insights?.length ? insight.insights : (live?.insights ?? []);
   const summary = tab === 'daily' ? insight?.summaryDaily : tab === 'weekly' ? insight?.summaryWeekly : insight?.summaryMonthly;
+  const modelOffline = !aiModelAvailable();
 
   async function run() {
     setBusy(true);
     try {
+      // Append a new insights row each refresh so score/insight history is kept.
       const result = await analyzeUnit(data, unit.id);
-      if (result) await data.save('unitInsights', { id: insight?.id, ...result });
+      if (result) await data.save<Partial<import('../data/types').UnitInsight>>('unitInsights', result);
     } finally { setBusy(false); }
   }
 
@@ -162,6 +192,7 @@ function AIPanel({ data, unit }: { data: ReturnType<typeof useOpsData>['data']; 
       <div className="card-head">
         <div className="card-title">AI analysis</div>
         <span className="row-inline">
+          {modelOffline && <span className="chip chip-amber" title="window.claude is unavailable here; summaries fall back to rule-based text. Scores and insight chips are always computed from live data.">AI model offline · rule-based</span>}
           {insight?.generatedAt && <span className="mono" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>updated {new Date(insight.generatedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
           <button className="btn btn-primary btn-sm" onClick={run} disabled={busy}>{busy ? 'Analysing…' : insight ? 'Refresh' : 'Analyse unit'}</button>
         </span>
@@ -177,6 +208,7 @@ function AIPanel({ data, unit }: { data: ReturnType<typeof useOpsData>['data']; 
           </div>
         </div>
       </div>
+      {history.length > 1 && <ScoreTrend history={history} />}
       {(insight?.summaryDaily || insight?.summaryWeekly || insight?.summaryMonthly) && (
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--panel-line)' }}>
           <div className="segmented" style={{ marginBottom: 8 }}>
@@ -188,6 +220,35 @@ function AIPanel({ data, unit }: { data: ReturnType<typeof useOpsData>['data']; 
         </div>
       )}
       {!insight && <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>Scores and insight chips are computed from the unit's live data. Run analysis for AI-written daily/weekly/monthly summaries (works without the model too — it falls back to a rules-based summary).</div>}
+    </div>
+  );
+}
+
+/* ---- score history sparklines (health + readiness over each analysis) ---- */
+function ScoreTrend({ history }: { history: import('../data/types').UnitInsight[] }) {
+  // Oldest → newest, capped to the last 12 runs.
+  const runs = [...history].reverse().slice(-12);
+  const line = (key: 'healthScore' | 'readinessScore', col: string) => {
+    const pts = runs.map((r, i) => {
+      const x = runs.length > 1 ? (i / (runs.length - 1)) * 100 : 0;
+      const y = 30 - (Math.max(0, Math.min(100, r[key] ?? 0)) / 100) * 28;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    return <polyline points={pts} fill="none" stroke={col} strokeWidth={1.5} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />;
+  };
+  return (
+    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--panel-line)' }}>
+      <div className="row-inline" style={{ justifyContent: 'space-between', marginBottom: 4 }}>
+        <span className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Score trend · last {runs.length}</span>
+        <span className="row-inline" style={{ gap: 10, fontSize: 10.5 }}>
+          <span style={{ color: 'var(--ok)' }}>● Health</span>
+          <span style={{ color: 'var(--accent-2)' }}>● Readiness</span>
+        </span>
+      </div>
+      <svg viewBox="0 0 100 30" preserveAspectRatio="none" style={{ width: '100%', height: 42, overflow: 'visible' }} aria-label="Score history">
+        {line('healthScore', 'var(--ok)')}
+        {line('readinessScore', 'var(--accent-2)')}
+      </svg>
     </div>
   );
 }

@@ -551,10 +551,14 @@ export class OpsData {
   unitChecklist(uid: string, kind: import('./types').ChecklistKind): import('./types').UnitChecklist | null {
     return this.unitChecklistsFor(uid).find((c) => c.kind === kind) || null;
   }
-  insightForUnit(uid: string): import('./types').UnitInsight | null {
+  /** All insight rows for a unit, newest first — the analysis history/trend. */
+  insightsForUnit(uid: string): import('./types').UnitInsight[] {
     return this.all<import('./types').UnitInsight>('unitInsights')
       .filter((i) => i.unitId === uid)
-      .sort((a, b) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))[0] || null;
+      .sort((a, b) => (b.generatedAt || '').localeCompare(a.generatedAt || ''));
+  }
+  insightForUnit(uid: string): import('./types').UnitInsight | null {
+    return this.insightsForUnit(uid)[0] || null;
   }
   eventsForUnit(uid: string): EventRec[] {
     const unit = this.get<Unit>('units', uid);

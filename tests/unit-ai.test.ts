@@ -105,6 +105,24 @@ describe('scoreUnit', () => {
   });
 });
 
+describe('scoreUnit — crew dominates readiness', () => {
+  it('a staffed but half-prepped unit beats a fully-prepped but unstaffed unit', () => {
+    const mk = (assigned: number, allOn: boolean) => scoreUnit({
+      unit: { id: 'U', clientId: 'C', type: 'Bar', crew: 4 } as any,
+      stock: [], lowStock: [], documents: [], flaggedDocs: [], tasks: [], openTasks: [],
+      assignments: Array.from({ length: assigned }, (_, i) => ({ id: 'A' + i })) as any,
+      checklists: [{ id: 'c', unitId: 'U', kind: 'safety', items: [
+        { id: '1', label: 'x', on: true },
+        { id: '2', label: 'y', on: allOn },
+      ] }] as any,
+      events: [], crewTarget: 4,
+    });
+    const staffed = mk(4, false);   // fully crewed, half checklist
+    const unstaffed = mk(0, true);  // no crew, full checklist
+    expect(staffed.readiness).toBeGreaterThan(unstaffed.readiness);
+  });
+});
+
 describe('ruleInsights (fallback, always available)', () => {
   const ins = ruleInsights(gatherUnitContext(store(), 'U001')!);
   it('flags the expired doc, low stock and open safety item', () => {
