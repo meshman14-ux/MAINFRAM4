@@ -7,6 +7,7 @@ const PRIMARY: { label: string; route: string; roles: Role[] }[] = [
   { label: 'Home',      route: '#/',          roles: ['owner', 'manager'] },
   { label: 'My Events', route: '#/portal',    roles: ['client'] },
   { label: 'Console',   route: '#/console',   roles: ['owner', 'manager'] },
+  { label: 'Accounts',  route: '#/accounts',  roles: ['owner', 'manager'] },
   { label: 'Pipeline',  route: '#/pipeline',  roles: ['owner', 'manager'] },
   { label: 'Tasks',     route: '#/tasks',     roles: ['owner', 'manager'] },
   { label: 'Callouts',  route: '#/callouts',  roles: ['owner', 'manager'] },

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import TopBar from './components/TopBar';
 import Home from './pages/Home';
 import OpsConsole from './pages/OpsConsole';
+import ClientAccounts from './pages/ClientAccounts';
 import EventsRegister from './pages/EventsRegister';
 import Calendar from './pages/Calendar';
 import StaffHub from './pages/StaffHub';
@@ -50,6 +51,7 @@ interface RouteDef { page: string; el: React.ReactNode; roles: ('owner'|'manager
 const ROUTES: Record<string, RouteDef> = {
   home:     { page: 'Home',      el: <Home />,          roles: ['owner', 'manager'] },
   console:  { page: 'Console',   el: <OpsConsole />,    roles: ['owner', 'manager'] },
+  accounts: { page: 'Accounts',  el: <ClientAccounts />, roles: ['owner', 'manager'] },
   callouts: { page: 'Callouts',  el: <Callouts />,      roles: ['owner', 'manager'] },
   onboard:  { page: 'Onboard',   el: <Onboarding />,    roles: ['owner', 'manager'] },
   readiness:{ page: 'Readiness', el: <Readiness />,     roles: ['owner', 'manager'] },

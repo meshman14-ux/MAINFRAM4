@@ -1,0 +1,19 @@
+-- ============================================================
+-- 05_addons_clientaccounts.sql — Client Accounts page (Phase A/1)
+-- ============================================================
+-- NO SCHEMA CHANGE REQUIRED. Documented for the migration trail.
+--
+-- The Client Accounts page stores its data in the existing mf_kv
+-- table (01_schema.sql) under two namespaces, exactly as the
+-- prototype did:
+--   ns = 'accounts'     -> { "<business name>": { "created": <ms> } }
+--   ns = 'diagnostics'  -> { "<business name>": { ...43 intake answers } }
+--
+-- RLS already covers this (02_rls.sql): kv_operator_all grants
+-- owner/manager full write; kv_authed_read grants read to any
+-- signed-in user. Live ops KPIs come from existing mf_clients /
+-- mf_units / mf_events / mf_staff rows matched by business name.
+--
+-- This file is intentionally a no-op and safe to run any number
+-- of times.
+select 1;
