@@ -201,15 +201,13 @@ export default function ClientAccounts() {
                   <span style={{ fontSize: 11.5, color: 'var(--ink-2)' }}>{c.completion} intake</span>
                   <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: c.scoreColor }}>{c.score ?? '—'}</span>
                 </div>
-                {c.client && (
-                  <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--accent-2)', marginTop: 'auto' }}>Open in console →</div>
-                )}
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--accent-2)', marginTop: 'auto' }}>Open diagnostic →</div>
               </>
             );
             const cardStyle = { display: 'flex', flexDirection: 'column' as const, gap: 14, textDecoration: 'none', color: 'inherit' };
-            return c.client
-              ? <a className="ev-card" key={c.name} href="#/console" style={cardStyle}>{body}</a>
-              : <div className="ev-card" key={c.name} style={cardStyle}>{body}</div>;
+            return (
+              <a className="ev-card" key={c.name} href={`#/diagnostic/${encodeURIComponent(c.name)}`} style={cardStyle}>{body}</a>
+            );
           })}
         </div>
       )}

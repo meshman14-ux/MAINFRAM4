@@ -23,6 +23,7 @@ const MORE: { label: string; route: string; roles: Role[] }[] = [
   { label: 'Timesheets', route: '#/timesheets', roles: ['owner', 'manager'] },
   { label: 'Logistics',  route: '#/logistics',  roles: ['owner', 'manager'] },
   { label: 'Onboard',    route: '#/onboard',    roles: ['owner', 'manager'] },
+  { label: 'Diagnostic', route: '#/diagnostic', roles: ['owner', 'manager'] },
 ];
 
 interface Props {

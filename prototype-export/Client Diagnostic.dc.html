@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="./opsdeck-data.js"></script>
+<style>
+:root{
+ --bg:oklch(0.13 0.022 268);
+ --panel:oklch(0.165 0.025 268/0.7);
+ --panel-2:oklch(0.21 0.028 268/0.8);
+ --line:oklch(0.32 0.035 268);
+ --text:oklch(0.97 0.005 260);
+ --muted:oklch(0.72 0.02 260);
+ --faint:oklch(0.52 0.02 260);
+ --accent:oklch(0.72 0.19 250);
+ --accent-2:oklch(0.62 0.25 295);
+ --ok:oklch(0.80 0.21 150);
+ --warn:oklch(0.75 0.18 55);
+ --danger:oklch(0.70 0.24 350);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent)} a:hover{color:var(--accent-2)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px;border:2px solid var(--bg)}
+::-webkit-scrollbar-track{background:transparent}
+input::placeholder,textarea::placeholder{color:var(--faint)}
+
+@keyframes mfDrift{0%{transform:translate(0,0) scale(1)}50%{transform:translate(60px,-40px) scale(1.15)}100%{transform:translate(0,0) scale(1)}}
+@keyframes mfDrift2{0%{transform:translate(0,0) scale(1.1)}50%{transform:translate(-70px,50px) scale(0.95)}100%{transform:translate(0,0) scale(1.1)}}
+@keyframes mfPulse{0%,100%{opacity:1}50%{opacity:.35}}
+</style>
+</helmet>
+<div data-screen-label="Client Diagnostic" style="min-height:100vh;display:flex;flex-direction:column">
+  <div style="position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden">
+    <div style="position:absolute;top:-180px;left:-120px;width:640px;height:640px;border-radius:50%;background:radial-gradient(circle,oklch(0.72 0.19 250/0.14),transparent 65%);animation:mfDrift 28s ease-in-out infinite"></div>
+    <div style="position:absolute;bottom:-220px;right:-140px;width:720px;height:720px;border-radius:50%;background:radial-gradient(circle,oklch(0.62 0.25 295/0.12),transparent 65%);animation:mfDrift2 34s ease-in-out infinite"></div>
+    <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,0.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.02) 1px,transparent 1px);background-size:48px 48px"></div>
+  </div>
+
+  <header style="min-height:70px;flex:none;border-bottom:1px solid var(--line);background:var(--panel);display:flex;align-items:center;padding:10px 30px;gap:16px;flex-wrap:wrap">
+    <div style="width:38px;height:38px;flex:none;border-radius:9px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-weight:600;font-size:17px;color:oklch(0.13 0.02 268)">M_</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:700;font-size:15px;letter-spacing:.02em">MAINFRAME · CLIENT DIAGNOSTIC</div>
+      <div style="font-size:11px;color:var(--faint);font-family:'JetBrains Mono',monospace">BUSINESS INTAKE &amp; SCOPING TOOL</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:13.5px;font-weight:600;color:var(--accent)">{{ completion }}</div>
+      <div style="font-size:11px;color:var(--faint)">questions answered</div>
+    </div>
+    <button onClick="{{ onPrintQ }}" title="Print the questionnaire to gather answers on paper" style="flex:none;padding:10px 15px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">Print</button>
+    <button onClick="{{ onSave }}" style="{{ saveStyle }}">{{ saveLabel }}</button>
+  </header>
+
+  <sc-if value="{{ showClientBar }}" hint-placeholder-val="{{ true }}">
+  <div style="flex:none;border-bottom:1px solid var(--line);background:var(--panel);padding:10px 30px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span style="font-size:11px;color:var(--faint);font-family:'JetBrains Mono',monospace;margin-right:4px">CLIENTS ›</span>
+    <sc-for list="{{ clientChips }}" as="c" hint-placeholder-count="2">
+      <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.name }}</button>
+    </sc-for>
+    <button onClick="{{ onNew }}" style="padding:7px 13px;border-radius:8px;border:1px dashed var(--line);background:transparent;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">+ New diagnostic</button>
+    <span style="flex:1"></span>
+    <span style="font-size:11px;color:var(--faint)">Saved on this device — run one per prospect</span>
+  </div>
+  </sc-if>
+
+  <div style="flex:1;display:flex;align-items:stretch;flex-wrap:wrap">
+
+    <!-- section nav -->
+    <aside style="width:232px;flex:none;border-right:1px solid var(--line);background:var(--panel);padding:16px 12px;display:flex;flex-direction:column;gap:3px">
+      <div style="font-size:10.5px;letter-spacing:.14em;color:var(--faint);font-family:'JetBrains Mono',monospace;padding:6px 10px 6px">INTAKE SECTIONS</div>
+      <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="5">
+        <button onClick="{{ n.onClick }}" style="{{ n.style }}">
+          <span style="{{ n.numStyle }}">{{ n.num }}</span>
+          <span style="flex:1;text-align:left">{{ n.label }}</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:{{ n.countColor }}">{{ n.count }}</span>
+        </button>
+      </sc-for>
+      <div style="flex:1"></div>
+      <div style="padding:12px 10px;border-top:1px solid var(--line);font-size:11.5px;color:var(--faint);line-height:1.55">Run this in the first client meeting. The diagnosis panel builds the pitch as you type.</div>
+    </aside>
+
+    <!-- questions -->
+    <main data-screen-label="Questions" style="flex:1;min-width:350px;padding:30px 34px 70px;overflow-y:auto">
+      <div style="max-width:680px">
+        <div style="font-size:20px;font-weight:700;letter-spacing:.01em">{{ sectionLabel }}</div>
+        <div style="font-size:13px;color:var(--muted);margin:4px 0 28px">{{ sectionDesc }}</div>
+
+        <sc-for list="{{ fields }}" as="f" hint-placeholder-count="5">
+          <div style="margin-bottom:28px">
+            <div style="font-size:13.5px;font-weight:600;margin-bottom:5px">{{ f.label }}</div>
+            <sc-if value="{{ f.hasDesc }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:11px;max-width:520px">{{ f.desc }}</div></sc-if>
+            <sc-if value="{{ f.isText }}" hint-placeholder-val="{{ false }}">
+              <input type="text" value="{{ f.value }}" onInput="{{ f.onInput }}" placeholder="{{ f.placeholder }}" style="width:100%;max-width:440px;padding:11px 14px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--text);font-family:inherit;font-size:13.5px;outline:none" />
+            </sc-if>
+            <sc-if value="{{ f.isFree }}" hint-placeholder-val="{{ false }}">
+              <textarea value="{{ f.value }}" onInput="{{ f.onInput }}" placeholder="{{ f.placeholder }}" style="width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--text);font-family:inherit;font-size:13.5px;outline:none;resize:vertical;min-height:110px"></textarea>
+            </sc-if>
+            <sc-if value="{{ f.isChips }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <sc-for list="{{ f.chips }}" as="c" hint-placeholder-count="4">
+                  <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ f.multiHint }}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px;color:var(--faint);margin-top:8px;font-family:'JetBrains Mono',monospace;letter-spacing:.06em">SELECT ALL THAT APPLY</div></sc-if>
+          </div>
+        </sc-for>
+
+        <div style="display:flex;gap:10px;margin-top:10px">
+          <button onClick="{{ onPrev }}" style="{{ prevStyle }}">‹ {{ prevLabel }}</button>
+          <button onClick="{{ onNext }}" style="{{ nextStyle }}">{{ nextLabel }} ›</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- live diagnosis -->
+    <sc-if value="{{ showFindings }}" hint-placeholder-val="{{ true }}">
+    <aside data-screen-label="Diagnosis" style="flex:1 1 334px;min-width:320px;max-width:430px;border-left:1px solid var(--line);border-top:1px solid var(--line);background:var(--panel);padding:22px 22px 50px;overflow-y:auto">
+      <div style="font-size:10.5px;letter-spacing:.14em;color:var(--faint);font-family:'JetBrains Mono',monospace;margin-bottom:14px">LIVE DIAGNOSIS</div>
+
+      <div style="background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:20px">
+        <div style="font-size:10.5px;letter-spacing:.1em;color:var(--faint);font-family:'JetBrains Mono',monospace;text-transform:uppercase">Ops maturity score</div>
+        <div style="display:flex;align-items:baseline;gap:6px;margin-top:6px"><span style="font-size:38px;font-weight:700;font-family:'JetBrains Mono',monospace;color:{{ scoreColor }}">{{ scoreStr }}</span><span style="font-size:13px;color:var(--faint);font-family:'JetBrains Mono',monospace">/ 100</span></div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:7px">{{ scoreNote }}</div>
+      </div>
+
+      <div style="font-size:10.5px;letter-spacing:.1em;color:var(--faint);font-family:'JetBrains Mono',monospace;margin-bottom:10px">RISK FLAGS</div>
+      <sc-if value="{{ notStarted }}" hint-placeholder-val="{{ true }}"><div style="font-size:12px;color:var(--faint);padding:6px 0 16px;line-height:1.5">Risks appear here as answers come in.</div></sc-if>
+      <sc-if value="{{ noFlags }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px;color:var(--ok);padding:6px 0 16px">No structural risks detected so far.</div></sc-if>
+      <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:22px">
+        <sc-for list="{{ flagCards }}" as="f" hint-placeholder-count="2">
+          <div style="border:1px solid {{ f.color }};background:{{ f.tint }};border-radius:9px;padding:11px 13px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;color:{{ f.color }};border:1px solid {{ f.color }};padding:1px 6px;border-radius:4px">{{ f.tag }}</span><span style="font-weight:600;font-size:12.5px">{{ f.title }}</span></div>
+            <div style="font-size:11.5px;color:var(--muted);line-height:1.5">{{ f.detail }}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="font-size:10.5px;letter-spacing:.1em;color:var(--faint);font-family:'JetBrains Mono',monospace;margin-bottom:6px">RECOMMENDED BUILD</div>
+      <div style="display:flex;flex-direction:column">
+        <sc-for list="{{ moduleRows }}" as="m" hint-placeholder-count="3">
+          <div style="display:flex;gap:11px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)">
+            <span style="font-size:10.5px;font-weight:600;color:{{ m.color }};border:1px solid {{ m.color }};padding:2px 8px;border-radius:20px;flex:none;font-family:'JetBrains Mono',monospace">{{ m.phase }}</span>
+            <div><div style="font-size:12.5px;font-weight:600">{{ m.title }}</div><div style="font-size:11px;color:var(--muted);line-height:1.45;margin-top:2px">{{ m.detail }}</div></div>
+          </div>
+        </sc-for>
+      </div>
+    </aside>
+    </sc-if>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showFindings&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Panels&quot;},&quot;showClientBar&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Panels&quot;}}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.sections=[
+      {id:'profile',label:'Business Profile',desc:'Who the operator is and how they trade.',fields:[
+        {id:'business_name',label:'Business name',type:'text',placeholder:'e.g. Bay Street Bars Ltd'},
+        {id:'operator_type',label:'What do they operate?',type:'chips',options:['Mobile bars','Street food','Event catering','Coffee','Mixed fleet','Other']},
+        {id:'years',label:'Years operating',type:'chips',options:['<1','1\u20133','3\u201310','10+']},
+        {id:'season',label:'Trading pattern',type:'chips',options:['Seasonal (summer)','Year-round','Weekends only']},
+        {id:'region',label:'Region / territory',type:'text',placeholder:'e.g. Midlands + South West'},
+        {id:'legal_structure',label:'Legal structure',type:'chips',options:['Sole trader','Partnership','Limited company','Not sure']},
+        {id:'key_person',label:'Who runs operations day-to-day?',type:'chips',options:['Owner does everything','Owner + office staff','Dedicated ops manager','Shared informally']}
+      ]},
+      {id:'fleet',label:'Fleet & Units',desc:'The trailers, vans and units they run.',fields:[
+        {id:'unit_count',label:'How many units?',type:'chips',options:['1\u20132','3\u20135','6\u201312','13+']},
+        {id:'unit_types',label:'Unit types',type:'multi',options:['Bar','Coffee','Food','Catering','Dessert','Pizza','Van / support']},
+        {id:'docs_tracked',label:'Compliance documents held per unit',type:'multi',options:['Gas Safe','PAT testing','Public liability','Employer liability','Vehicle MOT / tax','None tracked centrally']},
+        {id:'records',label:'Where do unit records live today?',type:'chips',options:['Paper folder','Spreadsheet','Software','Someone\u2019s head']},
+        {id:'breakdowns',label:'Unit breakdowns or downtime last season?',type:'chips',options:['Often','Occasionally','Rare / never']},
+        {id:'insurance_renewals',label:'How are insurance & certificate renewals tracked?',type:'chips',options:['System with reminders','Someone\u2019s diary / memory','Not tracked']}
+      ]},
+      {id:'staff',label:'Staff & Payroll',desc:'Crew size, clearances and how people get paid.',fields:[
+        {id:'headcount',label:'Peak-season headcount',type:'chips',options:['1\u20135','6\u201315','16\u201340','40+']},
+        {id:'roles',label:'Roles used',type:'multi',options:['Unit manager','Supervisor','Bartender','Barista','Chef','Kitchen assistant','Front of house','Driver']},
+        {id:'scheduling',label:'How are staff scheduled today?',type:'chips',options:['WhatsApp / texts','Spreadsheet','Rota software','Phone calls']},
+        {id:'rtw',label:'Are right-to-work & hygiene certificates verified and recorded?',type:'chips',options:['Yes, recorded','Partially','No']},
+        {id:'payroll',label:'How is payroll run?',type:'chips',options:['Manual from memory / notes','Spreadsheet','Payroll software','Accountant handles it']},
+        {id:'no_shows',label:'Staff no-shows or dropped shifts?',type:'chips',options:['Most events','Some events','Rare / never']},
+        {id:'turnover',label:'Staff turnover season to season',type:'chips',options:['Mostly new faces each year','Mixed','Mostly returners']},
+        {id:'staff_type',label:'How are most staff engaged?',type:'chips',options:['PAYE employees','Freelance / self-employed','Agency','Mix']}
+      ]},
+      {id:'events',label:'Events & Clients',desc:'The shape of the season and where bookings come from.',fields:[
+        {id:'events_count',label:'Events per season',type:'chips',options:['1\u20135','6\u201315','16\u201340','40+']},
+        {id:'event_size',label:'Typical events',type:'multi',options:['Local shows','Weddings / private','Mid-size festivals','Major festivals','Overseas']},
+        {id:'double_booking',label:'Do double-bookings (staff or units) happen today?',type:'chips',options:['Often','Sometimes','Never','Don\u2019t know']},
+        {id:'profit_visibility',label:'Do they know profit per event?',type:'chips',options:['Yes, per event','Roughly','No']},
+        {id:'deadlines',label:'Are organiser deadlines missed (RAMS, accreditation, trader packs)?',type:'chips',options:['Regularly','Occasionally','Never']},
+        {id:'reconciliation',label:'Are takings reconciled per unit, per day?',type:'chips',options:['Yes, daily','Sometimes','No']},
+        {id:'event_revenue',label:'Typical revenue per event',type:'chips',options:['<\u00a35k','\u00a35\u201320k','\u00a320\u201350k','\u00a350k+','Varies wildly']}
+      ]},
+      {id:'money',label:'Money & Admin',desc:'Cash flow, invoicing and the admin drag.',fields:[
+        {id:'invoicing',label:'How are clients quoted and invoiced?',type:'chips',options:['Word / PDF by hand','Spreadsheet','Accounting software','Rarely formalised']},
+        {id:'payroll_time',label:'How long does a pay run take?',type:'chips',options:['Under an hour','Half a day','A day or more']},
+        {id:'late_payments',label:'Do clients pay late or get chased informally?',type:'chips',options:['Often','Sometimes','Rare / never']},
+        {id:'admin_hours',label:'Office admin per week (rotas, chasing, paperwork)',type:'chips',options:['<5 hrs','5\u201315 hrs','15\u201330 hrs','30+ hrs']},
+        {id:'cost_tracking',label:'Do they track costs per unit (stock, staff, fuel)?',type:'chips',options:['Yes, per unit','Roughly','No']}
+      ]},
+      {id:'tech',label:'Technology',desc:'What they run on today \u2014 scopes what we build vs. integrate.',fields:[
+        {id:'current_software',label:'Software in use today',type:'multi',options:['None / paper','Spreadsheets','Accounting (Xero/QB)','Rota app','EPOS / till system','CRM','Project tool']},
+        {id:'spreadsheet_reliance',label:'How dependent are they on spreadsheets?',type:'chips',options:['Everything runs on them','A few key ones','Barely used']},
+        {id:'connectivity',label:'Mobile signal / wifi on-site',type:'chips',options:['Usually fine','Patchy','Often no signal on-site']},
+        {id:'tool_appetite',label:'Appetite for adopting a new system',type:'chips',options:['Keen','Cautious','Resistant']}
+      ]},
+      {id:'growth',label:'Growth & Goals',desc:'Where they want to be \u2014 gives the engagement a target.',fields:[
+        {id:'growth_goal',label:'Primary growth ambition',type:'chips',options:['More events / bookings','Better margins','Less admin time','Expand the fleet','Franchise / license']},
+        {id:'growth_blocker',label:'Biggest thing holding growth back',type:'chips',options:['Owner / admin time','Cash flow','Staff availability','Unit capacity','Finding clients']},
+        {id:'timeline',label:'Timeframe for change',type:'chips',options:['Before next season','This year','No fixed deadline']},
+        {id:'success_metric',label:'What does a successful engagement look like to them?',type:'free',placeholder:'In their words \u2014 e.g. \u201crun 40 events with the same office headcount\u201d'}
+      ]},
+      {id:'pain',label:'Pain Points',desc:'What hurts most \u2014 this drives which modules to build first.',fields:[
+        {id:'pains',label:'Biggest operational problems',type:'multi',options:['Double bookings','Chasing staff availability','Payroll takes days','Compliance docs expire unnoticed','No profit view per event','Onboarding paperwork','Stock ordering chaos','Client comms scattered']},
+        {id:'notes',label:'Anything else from the conversation',type:'free',placeholder:'Verbatim quotes, numbers, deadlines\u2026'}
+      ]}
+    ];
+    this.DESCS={
+      business_name:'The trading name you\u2019ll use on the proposal and all client-facing documents.',
+      operator_type:'What they actually sell. Drives which compliance and licensing modules apply.',
+      years:'Longevity is a proxy for process maturity and how entrenched current habits are.',
+      season:'Seasonal operators have sharp peaks \u2014 the system must handle a compressed, high-volume window.',
+      region:'Geographic spread affects travel, logistics and which local authorities they deal with.',
+      legal_structure:'Affects tax, liability and which insurances are mandatory (e.g. employers\u2019 liability).',
+      key_person:'Reveals key-person risk \u2014 if one person holds everything, that\u2019s a single point of failure.',
+      unit_count:'Fleet size sets the scale of the allocation and compliance problem.',
+      unit_types:'Different unit types carry different paperwork (gas, alcohol, food hygiene).',
+      docs_tracked:'What compliance they hold per unit today \u2014 and whether it\u2019s tracked at all.',
+      records:'Where records live tells you how visible (or invisible) expiries and history are.',
+      breakdowns:'Frequent breakdowns point to reactive rather than scheduled maintenance.',
+      insurance_renewals:'How renewals are tracked \u2014 a memory-based system is a lapse waiting to happen.',
+      headcount:'Peak crew size sets the scale of scheduling, payroll and onboarding.',
+      roles:'The role mix shapes the rota template and skill/clearance requirements.',
+      scheduling:'How shifts are assigned today \u2014 messaging apps leave no structural record.',
+      rtw:'Whether right-to-work and hygiene certs are verified and recorded before deployment.',
+      payroll:'How pay is calculated \u2014 manual methods are slow and error-prone.',
+      no_shows:'No-shows indicate shifts aren\u2019t being positively confirmed.',
+      turnover:'High turnover repeats onboarding cost every season.',
+      staff_type:'Employment model affects payroll, holiday pay, IR35 and insurance.',
+      events_count:'Season volume sets how often the whole allocation cycle runs.',
+      event_size:'The event mix shapes logistics, staffing and revenue profile.',
+      double_booking:'Whether staff or units get committed to overlapping events \u2014 the core failure the system prevents.',
+      profit_visibility:'Whether they can see which events actually make money.',
+      deadlines:'Missed organiser deadlines (RAMS, accreditation) risk losing pitches.',
+      reconciliation:'Whether daily takings are checked per unit \u2014 or shrinkage goes unseen.',
+      event_revenue:'Revenue scale per event frames the ROI of fixing operational leaks.',
+      invoicing:'How clients are quoted and billed \u2014 informal invoicing hurts cash flow.',
+      payroll_time:'Time per pay run is pure admin cost that automation removes.',
+      late_payments:'Late or chased payments signal a cash-flow control gap.',
+      admin_hours:'Weekly office admin is the time automation can give back.',
+      cost_tracking:'Whether costs are attributed per unit \u2014 without it, profit per event is guesswork.',
+      current_software:'The existing stack decides what we build fresh vs. integrate.',
+      spreadsheet_reliance:'Heavy spreadsheet dependence is fragile \u2014 one formula can break everything.',
+      connectivity:'On-site signal determines whether the system must work offline.',
+      tool_appetite:'Appetite for change sets how the rollout should be phased.',
+      growth_goal:'Their primary ambition gives the engagement a target to aim at.',
+      growth_blocker:'The main constraint on growth is usually the highest-value thing to fix.',
+      timeline:'Their timeframe sets the urgency and phasing of the build.',
+      success_metric:'Defining success in their words makes the engagement measurable.'
+    };
+    this.fieldCount=this.sections.reduce((n,s)=>n+s.fields.length,0);
+    let saved={};
+    try{ saved=(window.OPSDATA&&window.OPSDATA.kvGet('diagnostics'))||{}; }catch(e){ saved={}; }
+    let activeClient=null,answers={};
+    try{ const h=decodeURIComponent((location.hash||'').replace(/^#client=/,'')); if(h&&saved[h]){ activeClient=h; answers=Object.assign({},saved[h]); } }catch(e){}
+    this.state={section:0,answers,saved,activeClient};
+  }
+
+  persist(saved){ try{ window.OPSDATA&&window.OPSDATA.kvSet('diagnostics',saved); }catch(e){} }
+  setAns(id,val){ this.setState(s=>({answers:Object.assign({},s.answers,{[id]:val})})); }
+  toggleMulti(id,opt){ this.setState(s=>{ const cur=(s.answers[id]||[]).slice(); const i=cur.indexOf(opt); if(i>=0)cur.splice(i,1); else cur.push(opt); return {answers:Object.assign({},s.answers,{[id]:cur})}; }); }
+  answered(v){ return Array.isArray(v)?v.length>0:!!(v&&String(v).trim()); }
+  saveClient(){ const name=(this.state.answers.business_name||'').trim(); if(!name) return; const saved=Object.assign({},this.state.saved,{[name]:this.state.answers}); this.persist(saved); this.setState({saved,activeClient:name}); }
+  loadClient(name){ this.setState({activeClient:name,answers:Object.assign({},this.state.saved[name]),section:0}); }
+  newClient(){ this.setState({activeClient:null,answers:{},section:0}); }
+
+  computeFindings(a){
+    const flags=[];
+    const add=(sev,title,detail)=>flags.push({sev,title,detail});
+    if(a.records==='Paper folder'||a.records==='Someone\u2019s head') add('danger','Records not centralised','Unit compliance and history live in '+a.records.toLowerCase()+' \u2014 expiry dates are invisible until something fails an inspection.');
+    if((a.docs_tracked||[]).includes('None tracked centrally')) add('danger','No central compliance register','Gas, PAT and insurance expiries are untracked. One expired cert can shut a unit mid-event.');
+    if(a.scheduling==='WhatsApp / texts'||a.scheduling==='Phone calls') add('warn','Scheduling by message','No structural record of who is where \u2014 clashes get found on the day, not at booking.');
+    if(a.double_booking==='Often'||a.double_booking==='Sometimes') add('danger','Double-bookings already occurring','Confirmed relational failure \u2014 the OPSDECK allocation engine fixes this on day one. Lead the pitch with it.');
+    if(a.double_booking==='Don\u2019t know') add('warn','No visibility of clashes','They can\u2019t tell whether double-bookings happen \u2014 same fix, framed as visibility rather than rescue.');
+    if(a.rtw==='No'||a.rtw==='Partially') add('danger','Unverified right-to-work / hygiene','Legal exposure on every event. Blocking unverified staff at allocation is a headline feature for them.');
+    if(a.payroll==='Manual from memory / notes') add('warn','Manual payroll','Hours re-keyed by hand \u2014 errors plus days of admin per pay run.');
+    if(a.profit_visibility==='No'||a.profit_visibility==='Roughly') add('warn','No profit per event','They can\u2019t tell which events to drop. The costing view answers this directly.');
+    if(a.key_person==='Owner does everything') add('danger','Single point of failure','Everything routes through the owner \u2014 illness or one busy weekend stalls the whole operation. The system must externalise their head.');
+    if(a.key_person==='Shared informally') add('warn','Unclear ops ownership','No one clearly owns operations \u2014 tasks fall between people.');
+    if(a.breakdowns==='Often') add('warn','Reactive maintenance','Units fail during trade instead of being serviced between events \u2014 a maintenance log with scheduled checks pays for itself.');
+    if(a.insurance_renewals==='Someone\u2019s diary / memory'||a.insurance_renewals==='Not tracked') add('danger','Renewals untracked','Insurance and certificate expiries rely on memory \u2014 one lapse can void cover mid-season.');
+    if(a.no_shows==='Most events'||a.no_shows==='Some events') add('warn','Shift confirmation gap','No-shows mean shifts are never positively confirmed \u2014 automated confirmations and a standby list fix this.');
+    if(a.turnover==='Mostly new faces each year') add('warn','Onboarding burden','Rebuilding the crew every season repeats the same paperwork \u2014 a returner database plus digital onboarding cuts weeks of admin.');
+    if(a.deadlines==='Regularly') add('danger','Organiser deadlines missed','Late RAMS or accreditation risks losing pitches \u2014 per-event deadline tracking belongs in the core build.');
+    if(a.deadlines==='Occasionally') add('warn','Deadline near-misses','Organiser paperwork is being caught late \u2014 per-event deadline tracking removes the scramble.');
+    if(a.reconciliation==='No'||a.reconciliation==='Sometimes') add('warn','Takings not reconciled','Without per-unit daily reconciliation, shrinkage and card/cash gaps go unseen.');
+    if(a.payroll_time==='A day or more') add('warn','Payroll drag','A full day per pay run is pure admin cost \u2014 hours should flow straight from allocations.');
+    if(a.late_payments==='Often') add('warn','Cash-flow risk','Client payments are chased informally \u2014 invoicing with due-date tracking belongs in the commercial module.');
+    if(a.spreadsheet_reliance==='Everything runs on them') add('warn','Spreadsheet-dependent','A single broken formula or wrong tab can take out the whole operation \u2014 the relational build removes that fragility.');
+    if((a.current_software||[]).includes('None / paper')) add('warn','No software backbone','Operations run on paper \u2014 every module here is greenfield, which means fast, visible wins.');
+    if(a.connectivity==='Often no signal on-site') add('warn','Patchy on-site connectivity','Festival sites lose signal \u2014 the system must work offline and sync later. Design for this from the start.');
+    if(a.tool_appetite==='Resistant') add('warn','Change resistance','They are wary of new systems \u2014 phase the rollout and lead with one undeniable win before expanding.');
+    if(a.growth_blocker==='Owner / admin time'&&a.key_person!=='Owner does everything') add('warn','Owner time is the ceiling','Growth is capped by the owner\u2019s hours \u2014 automation of admin is the direct lever.');
+
+    const modules=[{phase:'CORE',title:'Events \u00b7 Units \u00b7 Staff',detail:'Every client starts here \u2014 the relational spine (Stages 1\u20133).'}];
+    const p=a.pains||[];
+    if(p.includes('Double bookings')||p.includes('Chasing staff availability')||a.double_booking==='Often'||a.double_booking==='Sometimes'||a.double_booking==='Don\u2019t know') modules.push({phase:'S4',title:'Allocation & conflict engine',detail:'Clash detection for staff and units at booking time, not on the day.'});
+    if(p.includes('Payroll takes days')||p.includes('No profit view per event')||(a.profit_visibility&&a.profit_visibility!=='Yes, per event')) modules.push({phase:'S5',title:'Costing & payroll',detail:'Hours \u2192 gross pay \u2192 profit per event, with no re-keying.'});
+    if(p.includes('Compliance docs expire unnoticed')||(a.docs_tracked||[]).includes('None tracked centrally')||a.breakdowns==='Often'||a.insurance_renewals==='Not tracked'||a.insurance_renewals==='Someone\u2019s diary / memory') modules.push({phase:'P2',title:'Assets & compliance',detail:'Cert register with expiry alerts, maintenance log; blocks non-compliant units from events.'});
+    if(p.includes('Stock ordering chaos')) modules.push({phase:'P3',title:'Stock & purchasing',detail:'Per-unit stock requirements, supplier database, purchase orders.'});
+    if(p.includes('Onboarding paperwork')||a.turnover==='Mostly new faces each year'||a.no_shows==='Most events'||a.no_shows==='Some events') modules.push({phase:'P4',title:'People & safety',detail:'Digital onboarding, shift confirmations, training records, RAMS and incident reporting.'});
+    if(p.includes('Client comms scattered')||a.late_payments==='Often'||a.invoicing==='Word / PDF by hand'||a.invoicing==='Rarely formalised') modules.push({phase:'P5',title:'Commercial / CRM',detail:'Client database, quoting, invoicing with due-date tracking and the event pipeline.'});
+
+    let score=100; flags.forEach(f=>{ score-=f.sev==='danger'?16:8; }); score=Math.max(score,15);
+    return {flags,modules,score};
+  }
+
+  renderVals(){
+    const st=this.state, a=st.answers;
+    const showFindings=this.props.showFindings ?? true;
+    const showClientBar=this.props.showClientBar ?? true;
+    const chipBase='padding:9px 15px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;border:1px solid ';
+    const sec=this.sections[st.section];
+
+    const fields=sec.fields.map(f=>{
+      const v=a[f.id];
+      const isText=f.type==='text', isFree=f.type==='free', isChipField=f.type==='chips'||f.type==='multi';
+      let chips=[];
+      if(isChipField){
+        chips=f.options.map(opt=>{
+          const on=f.type==='multi'?(v||[]).includes(opt):v===opt;
+          return {label:opt,
+            onClick:f.type==='multi'?(()=>this.toggleMulti(f.id,opt)):(()=>this.setAns(f.id,on?null:opt)),
+            style:chipBase+(on?'var(--accent);background:oklch(0.72 0.19 250/0.14);color:var(--accent)':'var(--line);background:var(--panel);color:var(--muted)')};
+        });
+      }
+      const desc=this.DESCS[f.id]||'';
+      return {label:f.label,placeholder:f.placeholder||'',isText,isFree,isChips:isChipField,multiHint:f.type==='multi',
+        desc,hasDesc:!!desc,
+        value:v||'',onInput:(e)=>this.setAns(f.id,e.target.value),chips};
+    });
+
+    const navItems=this.sections.map((s2,i)=>{
+      const done=s2.fields.filter(f=>this.answered(a[f.id])).length;
+      const active=i===st.section;
+      return {num:'0'+(i+1),label:s2.label,count:done+'/'+s2.fields.length,
+        countColor:done===s2.fields.length?'var(--ok)':'var(--faint)',
+        onClick:()=>this.setState({section:i}),
+        style:`display:flex;align-items:center;gap:10px;width:100%;padding:10px 10px;border:none;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:${active?600:500};background:${active?'var(--panel-2)':'transparent'};color:${active?'var(--text)':'var(--muted)'};box-shadow:${active?'inset 3px 0 0 var(--accent)':'none'}`,
+        numStyle:`width:26px;height:26px;flex:none;border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;background:${active?'var(--accent)':'var(--bg)'};color:${active?'oklch(0.13 0.02 268)':'var(--faint)'}`};
+    });
+
+    const answeredN=this.sections.reduce((n,s2)=>n+s2.fields.filter(f=>this.answered(a[f.id])).length,0);
+    const completion=answeredN+' / '+this.fieldCount;
+
+    const {flags,modules,score}=this.computeFindings(a);
+    const flagCards=flags.map(f=>({title:f.title,detail:f.detail,
+      color:f.sev==='danger'?'var(--danger)':'var(--warn)',
+      tint:f.sev==='danger'?'oklch(0.70 0.24 350/0.12)':'oklch(0.75 0.18 55/0.1)',
+      tag:f.sev==='danger'?'RISK':'WARN'}));
+    const moduleRows=modules.map(m=>({phase:m.phase,title:m.title,detail:m.detail,
+      color:m.phase==='CORE'?'var(--ok)':(m.phase[0]==='S'?'var(--accent)':'var(--accent-2)')}));
+    const started=answeredN>0;
+    const scoreStr=started?String(score):'\u2014';
+    const scoreColor=!started?'var(--faint)':score>=75?'var(--ok)':score>=50?'var(--warn)':'var(--danger)';
+    const scoreNote=!started?'Answer the questionnaire to build the diagnosis.':(score>=75?'Well-run operation \u2014 sell efficiency, not rescue.':score>=50?'Typical operator \u2014 clear, sellable wins available.':'High-risk operation \u2014 lead the pitch with the risk flags.');
+
+    const clientChips=Object.keys(st.saved).map(name=>{
+      const active=st.activeClient===name;
+      return {name,onClick:()=>this.loadClient(name),
+        style:`padding:7px 13px;border-radius:8px;border:1px solid ${active?'var(--accent)':'var(--line)'};background:${active?'oklch(0.72 0.19 250/0.13)':'var(--bg)'};color:${active?'var(--accent)':'var(--muted)'};font-size:12px;font-weight:600;cursor:pointer;font-family:inherit`};
+    });
+
+    const canSave=!!(a.business_name&&String(a.business_name).trim());
+    const prevOk=st.section>0, nextOk=st.section<this.sections.length-1;
+
+    return {
+      sectionLabel:sec.label,sectionDesc:sec.desc,fields,navItems,completion,
+      showFindings,showClientBar,
+      scoreStr,scoreColor,scoreNote,flagCards,noFlags:started&&flags.length===0,notStarted:!started,moduleRows,
+      clientChips,onNew:()=>this.newClient(),onSave:()=>this.saveClient(),
+      onPrintQ:()=>{ try{ window.print(); }catch(e){} },
+      saveLabel:st.activeClient?'Save changes':'Save client',
+      saveStyle:`flex:none;padding:10px 18px;border-radius:8px;border:1px solid ${canSave?'var(--accent)':'var(--line)'};background:${canSave?'var(--accent)':'transparent'};color:${canSave?'oklch(0.13 0.02 268)':'var(--faint)'};font-size:13px;font-weight:700;cursor:${canSave?'pointer':'not-allowed'};font-family:inherit`,
+      onPrev:()=>{ if(prevOk) this.setState({section:st.section-1}); },
+      onNext:()=>{ if(nextOk) this.setState({section:st.section+1}); },
+      prevLabel:prevOk?this.sections[st.section-1].label:'Start',
+      nextLabel:nextOk?this.sections[st.section+1].label:'End of intake',
+      prevStyle:`padding:11px 18px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:${prevOk?'var(--text)':'var(--faint)'};font-size:13px;font-weight:600;cursor:${prevOk?'pointer':'default'};font-family:inherit`,
+      nextStyle:`padding:11px 18px;border-radius:9px;border:1px solid ${nextOk?'var(--accent)':'var(--line)'};background:${nextOk?'oklch(0.72 0.19 250/0.13)':'transparent'};color:${nextOk?'var(--accent)':'var(--faint)'};font-size:13px;font-weight:600;cursor:${nextOk?'pointer':'default'};font-family:inherit`
+    };
+  }
+}
+</script>
+</body>
+</html>
