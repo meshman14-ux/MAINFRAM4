@@ -11,6 +11,7 @@ import EventsRegister from './pages/EventsRegister';
 import EventDashboard from './pages/EventDashboard';
 import EventDocs from './pages/EventDocs';
 import EventGantt from './pages/EventGantt';
+import TripleTimeline from './pages/TripleTimeline';
 import Calendar from './pages/Calendar';
 import StaffHub from './pages/StaffHub';
 import Callouts from './pages/Callouts';
@@ -84,6 +85,7 @@ const ROUTES: Record<string, RouteDef> = {
   // the data pack is read-only for crew/clients (RLS scopes what they see)
   event:    { page: 'Events',    el: <EventDashboard />, roles: ['owner', 'manager', 'crew', 'client'] },
   timeline: { page: 'Timeline',  el: <EventGantt />,     roles: ['owner', 'manager'] },
+  timelines:{ page: 'Timelines', el: <TripleTimeline />, roles: ['owner', 'manager'] },
   calendar: { page: 'Calendar',  el: <Calendar />,      roles: ['owner', 'manager', 'client'] },
   staff:    { page: 'Staff Hub', el: <StaffHub />,      roles: ['owner', 'manager', 'crew'] },
 };

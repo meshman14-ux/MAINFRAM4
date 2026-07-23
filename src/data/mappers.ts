@@ -42,6 +42,8 @@ export const fromRow = {
     shortlist: r.shortlist ?? {},
     callout: r.callout ?? undefined,
     eventOnboarding: r.event_onboarding ?? undefined,
+    category: r.category ?? undefined,
+    priority: r.priority ?? undefined,
   }),
   units: (r: any): Unit => ({
     id: r.id, clientId: r.client_id, type: r.type, code: r.code,
@@ -118,6 +120,7 @@ export const toRow = {
     unit_ids: o.unitIds, staffing: o.staffing,
     schedule: o.schedule, shortlist: o.shortlist,
     callout: o.callout, event_onboarding: o.eventOnboarding,
+    category: o.category, priority: o.priority,
   }),
   units: (o: Partial<Unit>): any => prune({
     id: o.id, client_id: o.clientId, type: o.type, code: o.code,

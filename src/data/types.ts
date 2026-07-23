@@ -45,6 +45,8 @@ export interface EventRec {
   shortlist?: Record<string, string[]>;       // { unitId: [staffId, ...] }
   callout?: Callout;          // job-board callout state
   eventOnboarding?: Record<string, boolean> & { ready?: boolean };
+  category?: string;          // free label for the timeline (e.g. 'Festival', 'Wedding')
+  priority?: string;          // 'high' | 'medium' | 'low' (timeline badge)
 }
 
 export interface Callout {
