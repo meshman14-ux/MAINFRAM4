@@ -86,7 +86,7 @@ export default function OpsConsole() {
         {client.contact && <span className="client-meta">{client.contact}{client.phone ? ` · ${client.phone}` : ''}</span>}
       </div>
 
-      <EventTimeline data={data} clientId={activeId} onOpen={() => setTab('Events')} />
+      <EventTimeline data={data} clientId={activeId} onOpen={(id) => { window.location.hash = `#/event/${id}`; }} />
 
       <div className="kpi-row">
         <div className="kpi-chip"><div className="k">Events</div><div className="v" style={{ color: 'var(--ink)' }}>{kpis.total}</div></div>

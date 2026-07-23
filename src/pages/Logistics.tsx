@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useOpsData } from '../data/useOpsData';
-import type { Client, EventRec, Unit, Staff, Movement, MovementStatus } from '../data/types';
+import type { Client, EventRec, Unit, Staff, Movement, MovementStatus, Vehicle, VehicleType } from '../data/types';
+import { VEHICLE_TYPES } from '../data/types';
+import { journeyEta, journeyMinutes } from '../data/phase12';
 
 const fmt = (iso?: string) => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
 const STATUS_COLOR: Record<MovementStatus, string> = {
@@ -53,12 +55,105 @@ export default function Logistics() {
         <div className="stat-box" data-tone={summary.towDrivers ? 'green' : 'red'}><div className="v">{summary.towDrivers}</div><div className="k">Tow drivers</div></div>
       </div>
 
+      <div className="row-inline" style={{ marginBottom: 16, justifyContent: 'flex-end' }}>
+        <button className="btn btn-sm" onClick={() => window.print()}>Print tab pack</button>
+      </div>
+
       {events.length === 0 ? (
         <div className="empty-state">No upcoming events for this operator.</div>
       ) : (
         events.map((e) => <LogisticsEvent key={e.id} data={data} event={e} clientId={activeId} today={today} />)
       )}
+
+      <div className="hub-grid no-print" style={{ marginTop: 22 }}>
+        <FleetCard data={data} clientId={activeId} />
+        <JourneyCalculator />
+      </div>
     </div>
+  );
+}
+
+/* The fleet — vans, trucks and trailers behind the movements board. */
+function FleetCard({ data, clientId }: { data: ReturnType<typeof useOpsData>['data']; clientId: string }) {
+  const [name, setName] = useState('');
+  const [reg, setReg] = useState('');
+  const [vtype, setVtype] = useState<VehicleType>('Van');
+  const [tow, setTow] = useState(false);
+
+  const fleet = useMemo(
+    () => data.all<Vehicle>('vehicles').filter((v) => v.clientId === clientId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [clientId, data.meta().updatedAt]
+  );
+
+  async function add() {
+    if (!name.trim()) return;
+    await data.save('vehicles', {
+      clientId, name: name.trim(), reg: reg || undefined, vtype, towCapable: tow,
+    } as Partial<Vehicle>);
+    setName(''); setReg('');
+  }
+
+  return (
+    <section className="card">
+      <div className="card-head">
+        <div className="card-title">Fleet</div>
+        <span className="mono" style={{ fontSize: 12, color: 'var(--ink-3)' }}>{fleet.length} vehicle{fleet.length !== 1 ? 's' : ''}</span>
+      </div>
+      {fleet.length === 0 ? (
+        <div className="muted" style={{ fontSize: 13 }}>No vehicles registered yet.</div>
+      ) : fleet.map((v) => (
+        <div className="ov-ev" key={v.id}>
+          <span className="chip chip-blue">{v.vtype}</span>
+          <span className="ov-ev-name">{v.name}</span>
+          {v.reg && <span className="mono ov-ev-date">{v.reg}</span>}
+          {v.towCapable && <span className="chip chip-green">tow</span>}
+          <button className="btn btn-ghost btn-sm" onClick={() => data.remove('vehicles', v.id)}>✕</button>
+        </div>
+      ))}
+      <div className="row-inline" style={{ marginTop: 12, flexWrap: 'wrap' }}>
+        <input className="inp" style={{ flex: 1, minWidth: 110 }} placeholder="Name (Sprinter 1)" value={name} onChange={(e) => setName(e.target.value)} />
+        <input className="inp" style={{ width: 100 }} placeholder="Reg" value={reg} onChange={(e) => setReg(e.target.value)} />
+        <select className="sel" style={{ width: 'auto' }} value={vtype} onChange={(e) => setVtype(e.target.value as VehicleType)}>
+          {VEHICLE_TYPES.map((t) => <option key={t}>{t}</option>)}
+        </select>
+        <label className="row-inline" style={{ fontSize: 12.5, gap: 5 }}>
+          <input type="checkbox" checked={tow} onChange={(e) => setTow(e.target.checked)} /> tow
+        </label>
+        <button className="btn btn-primary btn-sm" onClick={add} disabled={!name.trim()}>Add</button>
+      </div>
+    </section>
+  );
+}
+
+/* Journey-time calculator — distance → duration at convoy speed, +20% when
+   towing, gives departure→ETA. Pure maths from phase12, testable. */
+function JourneyCalculator() {
+  const [depart, setDepart] = useState('08:00');
+  const [miles, setMiles] = useState('60');
+  const [tow, setTow] = useState(true);
+  const mins = journeyMinutes(Number(miles) || 0);
+  const eta = journeyEta(depart, mins, tow);
+  const towMins = Math.round(mins * (tow ? 1.2 : 1));
+
+  return (
+    <section className="card">
+      <div className="card-head"><div className="card-title">Directions · ETA</div></div>
+      <div className="row-inline" style={{ flexWrap: 'wrap' }}>
+        <label>Depart<input className="inp" type="time" value={depart} onChange={(e) => setDepart(e.target.value)} /></label>
+        <label>Miles<input className="inp" style={{ width: 90 }} type="number" min={0} value={miles} onChange={(e) => setMiles(e.target.value)} /></label>
+        <label className="row-inline" style={{ fontSize: 12.5, gap: 5, alignSelf: 'end', paddingBottom: 8 }}>
+          <input type="checkbox" checked={tow} onChange={(e) => setTow(e.target.checked)} /> towing (+20%)
+        </label>
+      </div>
+      <div className="stat-strip" style={{ marginTop: 12, marginBottom: 0 }}>
+        <div className="stat-box" data-tone="blue"><div className="v">{towMins ? `${Math.floor(towMins / 60)}h ${towMins % 60}m` : '—'}</div><div className="k">Journey time</div></div>
+        <div className="stat-box" data-tone="green"><div className="v">{eta}</div><div className="k">ETA on site</div></div>
+      </div>
+      <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+        Assumes 38&nbsp;mph average with a loaded van on mixed roads. Add margin for site queues at peak arrival windows.
+      </p>
+    </section>
   );
 }
 

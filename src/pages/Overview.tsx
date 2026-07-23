@@ -95,7 +95,7 @@ export default function Overview() {
                     <span className="ov-ev-name">{e.name}</span>
                     <span className="mono ov-ev-date">{fmt(e.start)}</span>
                     <span className="status-pill" data-kind={st.kind}>{st.label}</span>
-                    <a className="btn btn-ghost btn-sm" href={`#/events/${e.id}`} style={{ textDecoration: 'none' }}>Open →</a>
+                    <a className="btn btn-ghost btn-sm" href={`#/event/${e.id}`} style={{ textDecoration: 'none' }}>Open →</a>
                   </div>
                 ))}
               </div>

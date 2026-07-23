@@ -1,0 +1,56 @@
+/* ============================================================
+   theme.css — the global polish layer, imported LAST so it wins.
+   Uniform 160ms motion, accessible focus, reduced-motion respect,
+   and the print sheet for the Logistics tab pack.
+   Colour identity itself lives in tokens.css (neon palette) and
+   unitTheme.ts (per-type hues) — this file is behaviour, not hue.
+   ============================================================ */
+
+/* one motion speed everywhere interactive */
+.btn, .tab, .chip, .tl-item, .unit-card, .ev-card, .kpi-chip, .shift-card,
+.logi-event, .ov-ev, .cal-cell, .reg-row, .cand, .slot, .avail-day,
+.segmented button, .nav a, .nav-more-btn, .ud-tick, .inp, .sel, .stat-box {
+  transition-property: background-color, border-color, color, box-shadow,
+    transform, opacity;
+  transition-duration: 160ms;
+  transition-timing-function: ease;
+}
+
+/* consistent, visible keyboard focus on every control */
+:focus-visible {
+  outline: 2px solid var(--neon-cyan);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* motion sensitivity: kill ambient drift, pulses and hover lifts */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .unit-card:hover, .kpi-chip:hover { transform: none; }
+}
+
+/* ---------- print: the Logistics "tab pack" ----------
+   Printing the Logistics page yields one clean journey sheet per event:
+   movements, drivers and departures — no nav, no forms, no neon. */
+@media print {
+  body { background: #fff !important; color: #000 !important; }
+  body::before, body::after { display: none !important; }
+  .topbar, .client-bar, .stat-strip, .kpi-row, .tabs,
+  .logi-form, .logi-pool, .logi-tow-warn, .no-print, button { display: none !important; }
+  .p4, .console { max-width: none; padding: 0; }
+  .logi-event {
+    break-inside: avoid;
+    border: 1px solid #999 !important;
+    border-left: 4px solid #000 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    margin-bottom: 14px;
+  }
+  .logi-name, .logi-sub, .logi-move-row { color: #000 !important; }
+  .logi-move-row { border: none; border-bottom: 1px solid #ddd; background: #fff !important; }
+  .logi-status-chip { border: 1px solid #000; color: #000 !important; background: #fff !important; box-shadow: none !important; }
+}

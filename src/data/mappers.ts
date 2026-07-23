@@ -7,7 +7,7 @@
    ============================================================ */
 import type {
   Client, EventRec, Unit, Staff, Assignment, StockLine, Application,
-  Timesheet, TableName,
+  Timesheet, Vehicle, Invoice, Expense, DocumentRec, ShoppingItem, TableName,
 } from '../data/types';
 
 /* ---- DB table names per logical table ---- */
@@ -20,6 +20,11 @@ export const DB_TABLE: Record<TableName, string> = {
   stock: 'mf_stock',
   applications: 'mf_applications',
   timesheets: 'mf_timesheets',
+  vehicles: 'mf_vehicles',
+  invoices: 'mf_invoices',
+  expenses: 'mf_expenses',
+  documents: 'mf_documents',
+  shoppingLists: 'mf_shopping_lists',
 };
 
 /* ---- row -> domain ---- */
@@ -47,6 +52,7 @@ export const fromRow = {
     id: r.id, clientId: r.client_id, name: r.name, role: r.role,
     phone: r.phone, rate: r.rate != null ? Number(r.rate) : undefined,
     rtw: r.rtw, canTow: r.can_tow, skills: r.skills ?? undefined,
+    staffNo: r.staff_no ?? undefined,
   }),
   assignments: (r: any): Assignment => ({
     id: r.id, eventId: r.event_id, unitId: r.unit_id,
@@ -56,6 +62,7 @@ export const fromRow = {
   stock: (r: any): StockLine => ({
     id: r.id, unitId: r.unit_id, item: r.item,
     qty: Number(r.qty) || 0, par: Number(r.par) || 0, unit: r.unit,
+    category: r.category ?? undefined,
   }),
   applications: (r: any): Application => ({
     id: r.id, eventId: r.event_id, unitId: r.unit_id,
@@ -72,6 +79,30 @@ export const fromRow = {
     rate: r.rate != null ? Number(r.rate) : undefined,
     overtime: r.overtime, status: r.status,
     approvedBy: r.approved_by ?? undefined, notes: r.notes ?? undefined,
+  }),
+  vehicles: (r: any): Vehicle => ({
+    id: r.id, clientId: r.client_id, name: r.name, reg: r.reg ?? undefined,
+    vtype: r.vtype, towCapable: !!r.tow_capable, notes: r.notes ?? undefined,
+  }),
+  invoices: (r: any): Invoice => ({
+    id: r.id, clientId: r.client_id, eventId: r.event_id ?? undefined,
+    number: r.number ?? undefined, issueDate: r.issue_date ?? undefined,
+    dueDate: r.due_date ?? undefined, status: r.status,
+    lines: r.lines ?? [], notes: r.notes ?? undefined,
+  }),
+  expenses: (r: any): Expense => ({
+    id: r.id, clientId: r.client_id, eventId: r.event_id ?? undefined,
+    expDate: r.exp_date ?? undefined, category: r.category,
+    descr: r.descr ?? undefined, amount: Number(r.amount) || 0,
+  }),
+  documents: (r: any): DocumentRec => ({
+    id: r.id, clientId: r.client_id, unitId: r.unit_id ?? undefined,
+    staffId: r.staff_id ?? undefined, title: r.title, docType: r.doc_type,
+    expiry: r.expiry ?? undefined, url: r.url ?? undefined, notes: r.notes ?? undefined,
+  }),
+  shoppingLists: (r: any): ShoppingItem => ({
+    id: r.id, unitId: r.unit_id, item: r.item, qty: Number(r.qty) || 0,
+    unit: r.unit ?? undefined, category: r.category ?? undefined, done: !!r.done,
   }),
 };
 
@@ -96,7 +127,7 @@ export const toRow = {
   staff: (o: Partial<Staff>): any => prune({
     id: o.id, client_id: o.clientId, name: o.name, role: o.role,
     phone: o.phone, rate: o.rate, rtw: o.rtw, can_tow: o.canTow,
-    skills: o.skills,
+    skills: o.skills, staff_no: o.staffNo,
   }),
   assignments: (o: Partial<Assignment>): any => prune({
     id: o.id, event_id: o.eventId, unit_id: o.unitId,
@@ -105,7 +136,7 @@ export const toRow = {
   }),
   stock: (o: Partial<StockLine>): any => prune({
     id: o.id, unit_id: o.unitId, item: o.item, qty: o.qty,
-    par: o.par, unit: o.unit,
+    par: o.par, unit: o.unit, category: o.category,
   }),
   applications: (o: Partial<Application>): any => prune({
     id: o.id, event_id: o.eventId, unit_id: o.unitId,
@@ -119,6 +150,29 @@ export const toRow = {
     break_mins: o.breakMins, hours: o.hours, rate: o.rate,
     overtime: o.overtime, status: o.status,
     approved_by: o.approvedBy, notes: o.notes,
+  }),
+  vehicles: (o: Partial<Vehicle>): any => prune({
+    id: o.id, client_id: o.clientId, name: o.name, reg: o.reg,
+    vtype: o.vtype, tow_capable: o.towCapable, notes: o.notes,
+  }),
+  invoices: (o: Partial<Invoice>): any => prune({
+    id: o.id, client_id: o.clientId, event_id: o.eventId,
+    number: o.number, issue_date: o.issueDate, due_date: o.dueDate,
+    status: o.status, lines: o.lines, notes: o.notes,
+  }),
+  expenses: (o: Partial<Expense>): any => prune({
+    id: o.id, client_id: o.clientId, event_id: o.eventId,
+    exp_date: o.expDate, category: o.category, descr: o.descr,
+    amount: o.amount,
+  }),
+  documents: (o: Partial<DocumentRec>): any => prune({
+    id: o.id, client_id: o.clientId, unit_id: o.unitId, staff_id: o.staffId,
+    title: o.title, doc_type: o.docType, expiry: o.expiry, url: o.url,
+    notes: o.notes,
+  }),
+  shoppingLists: (o: Partial<ShoppingItem>): any => prune({
+    id: o.id, unit_id: o.unitId, item: o.item, qty: o.qty,
+    unit: o.unit, category: o.category, done: o.done,
   }),
 };
 

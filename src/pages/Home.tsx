@@ -90,7 +90,7 @@ export default function Home() {
                   <div className="action-row" key={i}>
                     <span className="tag" data-kind={a.kind}>{a.kind}</span>
                     <span className="action-msg">{stripEventPrefix(a.message, a.eventName)}</span>
-                    <a className="action-go" href={`#/events/${a.eventId}`} aria-label={`Open ${a.eventName}`}>→</a>
+                    <a className="action-go" href={`#/event/${a.eventId}`} aria-label={`Open ${a.eventName}`}>→</a>
                   </div>
                 ))
               )}
@@ -108,7 +108,7 @@ export default function Home() {
                   <a
                     className="event-row"
                     key={r.id}
-                    href={`#/events/${r.id}`}
+                    href={`#/event/${r.id}`}
                     style={{ ['--evc' as string]: r.color }}
                   >
                     <div className="event-top">

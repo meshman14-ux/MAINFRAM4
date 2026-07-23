@@ -1,9 +1,19 @@
-# MAINFRAME — Foundation (Supabase schema + typed data-access layer)
+# MAINFRAME — Festival Operations System
 
-This is the **foundation layer** from the Build Brief: the real database and
-the typed data-access layer that every module becomes a thin view over. It's
-built directly from the shapes in your `opsdeck-data.js`, so moving off
-`localStorage` is a **storage swap, not a rewrite**.
+Multi-tab, multi-unit festival operations platform: events, units, staff,
+staffing, stock, compliance, logistics, timesheets, finance and the client
+pipeline — React 18 + Vite + TypeScript over Supabase (Postgres + Auth +
+Realtime), deployed on Vercel.
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — data flow, store, RLS, realtime,
+  table relationship map.
+- **[USAGE.md](USAGE.md)** — what each tab does and how to use it.
+- **[supabase/RUN_ALL.md](supabase/RUN_ALL.md)** — the exact SQL run order.
+- **[DEPLOY.md](DEPLOY.md)** — Supabase + Vercel deployment walkthrough.
+
+Everything below documents the foundation layer the modules sit on. It's
+built directly from the shapes in the original `opsdeck-data.js`, so moving
+off `localStorage` was a **storage swap, not a rewrite**.
 
 ## What's here
 
@@ -45,8 +55,8 @@ methods.
 ## Set up the database
 
 1. Create a Supabase project.
-2. In **SQL Editor**, run the files in order: `01_schema.sql`,
-   `02_rls.sql`, then `03_seed.sql`.
+2. In **SQL Editor**, run the files in the order listed in
+   `supabase/RUN_ALL.md` (01 → 08 — each file is idempotent).
 3. For each role, add an `mf_access` row linking a Supabase Auth user to a
    role (`owner` / `manager` / `crew` / `client`) and, for crew/client, a
    `client_id` scope (and `staff_id` for crew).

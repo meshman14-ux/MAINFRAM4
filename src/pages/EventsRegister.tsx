@@ -39,7 +39,7 @@ export default function EventsRegister() {
           <a
             key={r.id}
             className="reg-row"
-            href={`#/console`}
+            href={`#/event/${r.id}`}
             style={{ ['--evc' as string]: r.color }}
           >
             <span className="reg-accent" />

@@ -82,6 +82,7 @@ export interface Staff {
   rtw?: RTWStatus;
   canTow?: boolean;
   skills?: Area[];            // explicit; else derived from role
+  staffNo?: string;           // payroll/badge number, sortable
 }
 
 export interface Assignment {
@@ -101,6 +102,7 @@ export interface StockLine {
   qty: number;
   par: number;
   unit?: string;              // 'kegs', 'kg', ...
+  category?: string;          // 'Drink' | 'Food' | 'Consumables' | 'Equipment' | ...
 }
 
 export interface Application {
@@ -136,6 +138,12 @@ export interface OpsState {
   eventTasks: Record<string, EventTask>;
   // Phase 11 — timesheets (clock in/out, payroll).
   timesheets: Record<string, Timesheet>;
+  // Phase 12 — system upgrade: fleet, commercial records, documents, purchasing.
+  vehicles: Record<string, Vehicle>;
+  invoices: Record<string, Invoice>;
+  expenses: Record<string, Expense>;
+  documents: Record<string, DocumentRec>;
+  shoppingLists: Record<string, ShoppingItem>;
 }
 
 export interface Cert {
@@ -224,9 +232,80 @@ export interface Timesheet {
   notes?: string;
 }
 
+/* ---------------- Phase 12: System upgrade (commercial + fleet + docs) ---------------- */
+
+export type VehicleType = 'Van' | 'Truck' | 'Car' | 'Trailer';
+export const VEHICLE_TYPES: VehicleType[] = ['Van', 'Truck', 'Car', 'Trailer'];
+
+export interface Vehicle {
+  id: string;
+  clientId: string;
+  name: string;            // 'Sprinter 1'
+  reg?: string;            // registration plate
+  vtype: VehicleType;
+  towCapable?: boolean;
+  notes?: string;
+}
+
+export interface InvoiceLine { desc: string; qty: number; unitPrice: number; }
+
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue';
+export const INVOICE_STATUSES: InvoiceStatus[] = ['draft', 'sent', 'paid', 'overdue'];
+
+export interface Invoice {
+  id: string;
+  clientId: string;
+  eventId?: string;
+  number?: string;         // 'INV-001'
+  issueDate?: string;      // ISO date
+  dueDate?: string;
+  status: InvoiceStatus;
+  lines: InvoiceLine[];    // jsonb on the row, like event.schedule
+  notes?: string;
+}
+
+export type ExpenseCategory = 'Stock' | 'Fuel' | 'Hire' | 'Repairs' | 'Wages' | 'General';
+export const EXPENSE_CATEGORIES: ExpenseCategory[] = ['Stock', 'Fuel', 'Hire', 'Repairs', 'Wages', 'General'];
+
+export interface Expense {
+  id: string;
+  clientId: string;
+  eventId?: string;
+  expDate?: string;        // ISO date
+  category: ExpenseCategory;
+  descr?: string;
+  amount: number;
+}
+
+export type DocType = 'Insurance' | 'Licence' | 'Hygiene' | 'Safety' | 'RAMS' | 'General';
+export const DOC_TYPES: DocType[] = ['Insurance', 'Licence', 'Hygiene', 'Safety', 'RAMS', 'General'];
+
+export interface DocumentRec {
+  id: string;
+  clientId: string;
+  unitId?: string;         // scope to a unit (optional)
+  staffId?: string;        // or to a crew member (optional)
+  title: string;
+  docType: DocType;
+  expiry?: string;         // ISO date — drives the Information Hub flags
+  url?: string;
+  notes?: string;
+}
+
+export interface ShoppingItem {
+  id: string;
+  unitId: string;
+  item: string;
+  qty: number;
+  unit?: string;
+  category?: string;
+  done: boolean;
+}
+
 export type TableName =
   | 'clients' | 'events' | 'units' | 'staff'
-  | 'assignments' | 'stock' | 'applications' | 'timesheets';
+  | 'assignments' | 'stock' | 'applications' | 'timesheets'
+  | 'vehicles' | 'invoices' | 'expenses' | 'documents' | 'shoppingLists';
 
 /** Derived compliance result (from staffCompliance). */
 export interface Compliance {

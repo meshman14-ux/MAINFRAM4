@@ -8,6 +8,7 @@ import ClientDiagnostic from './pages/ClientDiagnostic';
 import ClientProposal from './pages/ClientProposal';
 import ImplementationPlan from './pages/ImplementationPlan';
 import EventsRegister from './pages/EventsRegister';
+import EventDashboard from './pages/EventDashboard';
 import Calendar from './pages/Calendar';
 import StaffHub from './pages/StaffHub';
 import Callouts from './pages/Callouts';
@@ -37,6 +38,7 @@ import './styles/tasks.css';
 import './styles/timesheets.css';
 import './styles/portal.css';
 import './styles/auth.css';
+import './styles/theme.css'; // polish layer — must stay last
 
 function useHashRoute() {
   const [hash, setHash] = useState(() => window.location.hash || '#/');
@@ -72,6 +74,7 @@ const ROUTES: Record<string, RouteDef> = {
   tasks:    { page: 'Tasks',     el: <Tasks />,         roles: ['owner', 'manager'] },
   portal:   { page: 'My Events', el: <ClientPortal />,  roles: ['client'] },
   events:   { page: 'Events',    el: <EventsRegister />, roles: ['owner', 'manager', 'client'] },
+  event:    { page: 'Events',    el: <EventDashboard />, roles: ['owner', 'manager'] },
   calendar: { page: 'Calendar',  el: <Calendar />,      roles: ['owner', 'manager', 'client'] },
   staff:    { page: 'Staff Hub', el: <StaffHub />,      roles: ['owner', 'manager', 'crew'] },
 };

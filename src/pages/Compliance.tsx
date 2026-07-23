@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useOpsData } from '../data/useOpsData';
-import type { Client } from '../data/types';
+import type { Client, DocumentRec, DocType, Unit } from '../data/types';
+import { DOC_TYPES } from '../data/types';
 import { complianceRegister, complianceSummary } from '../data/phase6';
+import { docState, generateResearch } from '../data/phase12';
+import { unitColor } from '../components/console/unitTheme';
 
 /* Status hue per compliance state — drives each card's glow. */
 const STATUS_COLOR: Record<string, string> = {
@@ -93,6 +96,107 @@ export default function Compliance() {
           })}
         </div>
       )}
+
+      <InformationHub data={data} clientId={activeId} />
+      <UnitComplianceGuide data={data} clientId={activeId} />
+    </div>
+  );
+}
+
+const DOC_STATE_CHIP: Record<string, string> = {
+  ok: 'chip-green', expiring: 'chip-amber', expired: 'chip-red', none: 'chip-blue',
+};
+const fmtD = (iso?: string) => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'no expiry';
+
+/* Information Hub — the central register of every compliance document
+   (insurance, licences, hygiene certs, RAMS…) with expiry flags. */
+function InformationHub({ data, clientId }: { data: ReturnType<typeof useOpsData>['data']; clientId: string }) {
+  const [title, setTitle] = useState('');
+  const [dtype, setDtype] = useState<DocType>('Insurance');
+  const [expiry, setExpiry] = useState('');
+  const [unitId, setUnitId] = useState('');
+  const units = data.unitsForClient(clientId);
+
+  const docs = useMemo(
+    () => data.all<DocumentRec>('documents').filter((d) => d.clientId === clientId)
+      .sort((a, b) => (a.expiry || '9999').localeCompare(b.expiry || '9999')),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [clientId, data.meta().updatedAt]
+  );
+  const flagged = docs.filter((d) => { const s = docState(d); return s === 'expired' || s === 'expiring'; }).length;
+
+  async function add() {
+    if (!title.trim()) return;
+    await data.save('documents', {
+      clientId, title: title.trim(), docType: dtype,
+      expiry: expiry || undefined, unitId: unitId || undefined,
+    } as Partial<DocumentRec>);
+    setTitle(''); setExpiry('');
+  }
+
+  return (
+    <section className="card" style={{ marginTop: 22 }}>
+      <div className="card-head">
+        <div className="card-title">Information Hub — documents</div>
+        {flagged > 0 && <span className="chip chip-red">{flagged} need attention</span>}
+      </div>
+      {docs.length === 0 ? (
+        <div className="muted" style={{ fontSize: 13 }}>No documents registered. Add insurance, licences, hygiene certificates and RAMS so expiry is tracked in one place.</div>
+      ) : docs.map((d) => {
+        const s = docState(d);
+        const u = d.unitId ? data.get<Unit>('units', d.unitId) : null;
+        return (
+          <div className="ov-ev" key={d.id} style={{ ['--evc' as string]: s === 'expired' ? 'var(--neon-pink)' : s === 'expiring' ? 'var(--neon-yellow)' : undefined }}>
+            <span className="chip chip-blue">{d.docType}</span>
+            <span className="ov-ev-name">{d.title}{u ? ` · ${u.code}` : ''}</span>
+            <span className="mono ov-ev-date">{fmtD(d.expiry)}</span>
+            <span className={`chip ${DOC_STATE_CHIP[s]}`}>{s === 'none' ? 'no expiry' : s}</span>
+            <button className="btn btn-ghost btn-sm" onClick={() => data.remove('documents', d.id)}>✕</button>
+          </div>
+        );
+      })}
+      <div className="row-inline" style={{ marginTop: 12, flexWrap: 'wrap' }}>
+        <select className="sel" style={{ width: 'auto' }} value={dtype} onChange={(e) => setDtype(e.target.value as DocType)} aria-label="Type">
+          {DOC_TYPES.map((t) => <option key={t}>{t}</option>)}
+        </select>
+        <input className="inp" style={{ flex: 1, minWidth: 150 }} placeholder="Document title (e.g. Public liability 2026)"
+          value={title} onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') add(); }} />
+        <select className="sel" style={{ width: 'auto' }} value={unitId} onChange={(e) => setUnitId(e.target.value)} aria-label="Unit">
+          <option value="">Whole business</option>
+          {units.map((u) => <option key={u.id} value={u.id}>{u.code}</option>)}
+        </select>
+        <input className="inp" style={{ width: 'auto' }} type="date" aria-label="Expiry" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
+        <button className="btn btn-primary btn-sm" onClick={add} disabled={!title.trim()}>Add</button>
+      </div>
+    </section>
+  );
+}
+
+/* What each unit type must hold — from the research generator, so Stock,
+   Compliance and unit details all tell the same story. */
+function UnitComplianceGuide({ data, clientId }: { data: ReturnType<typeof useOpsData>['data']; clientId: string }) {
+  const units = data.unitsForClient(clientId);
+  const types = [...new Set(units.map((u) => u.type))];
+  if (types.length === 0) return null;
+  return (
+    <div className="unit-grid" style={{ marginTop: 22 }}>
+      {types.map((t) => {
+        const r = generateResearch(t);
+        const col = unitColor(t);
+        return (
+          <div className="unit-card" key={t} style={{ ['--uc' as string]: col }}>
+            <div className="ev-head">
+              <span className="ev-swatch" style={{ color: col }} />
+              <span className="chip unit-type-chip">{t}</span>
+              <span className="ev-label" style={{ marginLeft: 'auto' }}>required compliance</span>
+            </div>
+            <ul style={{ margin: '10px 0 0', paddingLeft: 18, fontSize: 13, lineHeight: 1.7, color: 'var(--ink-2)' }}>
+              {r.compliance.map((c) => <li key={c}>{c}</li>)}
+            </ul>
+          </div>
+        );
+      })}
     </div>
   );
 }

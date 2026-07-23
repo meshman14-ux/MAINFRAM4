@@ -37,6 +37,10 @@ In the Supabase dashboard, open **SQL Editor** and run the files from the
 3. `03_seed.sql` — *optional* demo data (JP Events, a few events, crew, stock).
    Skip this for a clean production start; run it if you want something to look
    at immediately.
+4. Then the add-on migrations in numeric order — `04_auth_setup.sql`,
+   `05_addons_clientaccounts.sql`, `05_pipeline.sql`, `06_logistics.sql`,
+   `07_tasks.sql`, `08_system_upgrade.sql`. The full, always-current list
+   with what each adds lives in **`supabase/RUN_ALL.md`**.
 
 > The RLS policies rely on Supabase's built-in `auth.uid()` and the
 > `authenticated` role, both of which exist automatically in a Supabase

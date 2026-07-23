@@ -33,6 +33,8 @@ type Sub = () => void;
 const PREFIX: Record<TableName, string> = {
   clients: 'C', events: 'E', units: 'U', staff: 'S',
   assignments: 'A', stock: 'K', applications: 'P', timesheets: 'T',
+  vehicles: 'V', invoices: 'I', expenses: 'X', documents: 'D',
+  shoppingLists: 'L',
 };
 
 const AREAS: Area[] = ['Bar', 'Coffee', 'Food', 'General', 'Driver', 'Supervisor'];
@@ -67,13 +69,27 @@ export class OpsData {
 
   /* ---------------- lifecycle ---------------- */
 
+  /** Tables that may not exist yet on a live DB (migration 08 pending).
+      Loading tolerates their absence so the app still boots; they stay
+      empty until the SQL is run. Core tables still fail loudly. */
+  private static OPTIONAL_TABLES: TableName[] = [
+    'timesheets', 'vehicles', 'invoices', 'expenses', 'documents', 'shoppingLists',
+  ];
+
   /** Initial load of every table into the in-memory mirror. */
   async load(): Promise<void> {
     const tables = Object.keys(DB_TABLE) as TableName[];
     await Promise.all(
       tables.map(async (t) => {
         const { data, error } = await supabase.from(DB_TABLE[t]).select('*');
-        if (error) throw new Error(`load ${t}: ${error.message}`);
+        if (error) {
+          if (OpsData.OPTIONAL_TABLES.includes(t)) {
+            console.warn(`[MAINFRAME] ${DB_TABLE[t]} not available yet (run supabase/08_system_upgrade.sql): ${error.message}`);
+            (this.db as any)[t] = {};
+            return;
+          }
+          throw new Error(`load ${t}: ${error.message}`);
+        }
         const bucket: Record<string, any> = {};
         (data ?? []).forEach((r: Row) => {
           bucket[r.id] = (fromRow[t] as (x: Row) => any)(r);
@@ -1257,6 +1273,7 @@ function emptyState(): OpsState {
     assignments: {}, stock: {}, applications: {}, kv: {},
     certs: {}, availability: {}, pipeline: {}, movements: {}, eventTasks: {},
     timesheets: {},
+    vehicles: {}, invoices: {}, expenses: {}, documents: {}, shoppingLists: {},
   };
 }
 
