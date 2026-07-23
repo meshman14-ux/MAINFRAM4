@@ -58,7 +58,9 @@ export default function EventGantt({ onOpenEvent }: { onOpenEvent?: (id: string)
   const { data, ready, error } = useOpsData();
   const open = onOpenEvent || ((id: string) => { window.location.hash = `#/event/${id}`; });
   const [picked, setPicked] = useState<string>(todayISO());
-  const [week, setWeek] = useState(false);
+  const [view, setView] = useState<'day' | 'week' | 'month' | 'year'>('day');
+  const [monthCur, setMonthCur] = useState(() => { const n = new Date(); return { y: n.getFullYear(), m: n.getMonth() }; });
+  const [yearCur, setYearCur] = useState(() => new Date().getFullYear());
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [lanes, setLanes] = useState({ logistics: false, availability: false, compliance: false });
 
@@ -119,14 +121,16 @@ export default function EventGantt({ onOpenEvent }: { onOpenEvent?: (id: string)
         </div>
       </div>
 
-      {/* day tabs + week */}
+      {/* view tabs: week / month / year + day strip */}
       <div style={{ display: 'flex', gap: 4, overflowX: 'auto', marginBottom: 16, paddingBottom: 4 }}>
-        <button className="tab" aria-selected={week} onClick={() => setWeek(true)} style={{ ['--tc' as string]: 'var(--neon-purple-text)' }}>Week</button>
+        <button className="tab" aria-selected={view === 'week'} onClick={() => setView('week')} style={{ ['--tc' as string]: 'var(--neon-purple-text)' }}>Week</button>
+        <button className="tab" aria-selected={view === 'month'} onClick={() => setView('month')} style={{ ['--tc' as string]: 'var(--neon-pink)' }}>Month</button>
+        <button className="tab" aria-selected={view === 'year'} onClick={() => setView('year')} style={{ ['--tc' as string]: 'var(--neon-yellow)' }}>Year</button>
         {v.days.map((d) => {
           const n = v.onDay(d).length;
           return (
-            <button key={d} className="tab" aria-selected={!week && picked === d}
-              onClick={() => { setPicked(d); setWeek(false); }}
+            <button key={d} className="tab" aria-selected={view === 'day' && picked === d}
+              onClick={() => { setPicked(d); setView('day'); }}
               style={{ ['--tc' as string]: 'var(--neon-cyan)', opacity: n ? 1 : 0.55 }}>
               {fmtDay(d)}{n > 0 && <span className="mono" style={{ fontSize: 9.5, marginLeft: 5, color: 'var(--neon-cyan)' }}>{n}</span>}
             </button>
@@ -134,9 +138,18 @@ export default function EventGantt({ onOpenEvent }: { onOpenEvent?: (id: string)
         })}
       </div>
 
-      {week ? (
-        <WeekView v={v} data={data} open={open} pick={(d) => { setPicked(d); setWeek(false); }} />
-      ) : (
+      {view === 'week' && (
+        <WeekView v={v} data={data} open={open} pick={(d) => { setPicked(d); setView('day'); }} />
+      )}
+      {view === 'month' && (
+        <MonthView v={v} data={data} open={open} cur={monthCur} setCur={setMonthCur}
+          pick={(d) => { setPicked(d); setView('day'); }} />
+      )}
+      {view === 'year' && (
+        <YearView v={v} data={data} open={open} year={yearCur} setYear={setYearCur}
+          pickMonth={(y, m) => { setMonthCur({ y, m }); setView('month'); }} />
+      )}
+      {view === 'day' && (
         <div className="card" style={{ overflowX: 'auto' }}>
           <div style={{ minWidth: 760, position: 'relative' }}>
             {/* hour axis */}
@@ -244,7 +257,9 @@ function WeekView({ v, data, open, pick }: {
 }) {
   const days = v.days.slice(0, 7);
   return (
+    <>
     <div className="card" style={{ overflowX: 'auto' }}>
+      <div className="card-head"><div className="card-title">Week schedule</div></div>
       <div style={{ minWidth: 720 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, marginBottom: 8 }}>
           {days.map((d) => (
@@ -278,10 +293,17 @@ function WeekView({ v, data, open, pick }: {
               })}
           </div>
         </div>
+      </div>
+    </div>
 
+    {/* separate widget: the weekly allocation chart */}
+    <div className="card" style={{ overflowX: 'auto', marginTop: 14 }}>
+      <div className="card-head"><div className="card-title">Weekly allocations</div></div>
+      <div style={{ minWidth: 720 }}>
         <WeekAllocations v={v} data={data} days={days} open={open} />
       </div>
     </div>
+    </>
   );
 }
 
@@ -323,7 +345,7 @@ function WeekAllocations({ v, data, days, open }: {
   const rows = [...byStaff.values()].sort((x, y) => x.staff.name.localeCompare(y.staff.name));
 
   return (
-    <div style={{ marginTop: 22 }}>
+    <div>
       <div className="ev-label" style={{ marginBottom: 8 }}>Daily allocations — crew across the week</div>
 
       {/* per-day totals chart */}
@@ -395,6 +417,214 @@ function WeekAllocations({ v, data, days, open }: {
         <span className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)' }}>solid = confirmed · faded dash = unconfirmed · red dash = unavailable · ⚠ = double-booked</span>
       </div>
     </div>
+  );
+}
+
+/* ---------- shared: allocation totals for a run of days ---------- */
+function dayTotals(data: ReturnType<typeof useOpsData>['data'], onDay: (d: string) => EventRec[], days: string[]) {
+  return days.map((d) => {
+    const evs = onDay(d);
+    const need = evs.reduce((n, e) => n + Object.values(data.staffingFor(e)).reduce((x: number, y) => x + (y as number), 0), 0);
+    const got = evs.reduce((n, e) => n + data.assignmentsForEvent(e.id).length, 0);
+    const conf = evs.reduce((n, e) => n + data.assignmentsForEvent(e.id).filter((a) => a.confirmed).length, 0);
+    return { d, need, got, conf, events: evs.length };
+  });
+}
+
+/* Reusable stacked allocation bars over N columns. */
+function AllocBars({ totals, label, colLabel, onPick }: {
+  totals: { d: string; need: number; got: number; conf: number }[];
+  label: string; colLabel: (d: string, i: number) => string;
+  onPick?: (d: string) => void;
+}) {
+  const maxNeed = Math.max(1, ...totals.map((t) => Math.max(t.need, t.got)));
+  return (
+    <div>
+      <div className="ev-label" style={{ marginBottom: 8 }}>{label}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${totals.length}, 1fr)`, gap: 3, alignItems: 'end', minHeight: 74 }}>
+        {totals.map((t, i) => {
+          const ok = t.need > 0 && t.got >= t.need;
+          return (
+            <div key={t.d} title={`${t.d} · ${t.got}/${t.need} allocated · ${t.conf} confirmed`}
+              role={onPick ? 'button' : undefined} tabIndex={onPick ? 0 : -1}
+              onClick={() => onPick?.(t.d)} onKeyDown={(k) => { if (k.key === 'Enter') onPick?.(t.d); }}
+              style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 2, height: 74, cursor: onPick ? 'pointer' : 'default' }}>
+              {t.need > t.got && (
+                <div style={{ height: `${((t.need - t.got) / maxNeed) * 80}%`, minHeight: 3, borderRadius: 2, background: 'color-mix(in oklch, var(--warn) 30%, transparent)', border: '1px dashed var(--warn)' }} />
+              )}
+              {t.got > 0 && (
+                <div style={{ height: `${(t.got / maxNeed) * 80}%`, minHeight: 3, borderRadius: 2, background: ok ? 'var(--ok)' : 'var(--warn)', boxShadow: `0 0 6px ${ok ? 'var(--ok)' : 'var(--warn)'}` }} />
+              )}
+              <span className="mono" style={{ fontSize: 8, color: ok ? 'var(--ok)' : t.need ? 'var(--warn)' : 'var(--ink-3)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                {colLabel(t.d, i)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Month view: schedule widget + allocation widget ---------- */
+function MonthView({ v, data, open, cur, setCur, pick }: {
+  v: { events: EventRec[]; opColor: (c: string) => string; onDay: (d: string) => EventRec[] };
+  data: ReturnType<typeof useOpsData>['data'];
+  open: (id: string) => void;
+  cur: { y: number; m: number }; setCur: (c: { y: number; m: number }) => void;
+  pick: (d: string) => void;
+}) {
+  const first = `${cur.y}-${String(cur.m + 1).padStart(2, '0')}-01`;
+  const daysInMonth = new Date(cur.y, cur.m + 1, 0).getDate();
+  const days = Array.from({ length: daysInMonth }, (_, i) => addDays(first, i));
+  const label = new Date(cur.y, cur.m, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const monthEvents = v.events
+    .filter((e) => (e.end || e.start!) >= days[0] && e.start! <= days[daysInMonth - 1])
+    .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+  const totals = dayTotals(data, v.onDay, days);
+  const shift = (delta: number) => {
+    const d = new Date(cur.y, cur.m + delta, 1);
+    setCur({ y: d.getFullYear(), m: d.getMonth() });
+  };
+
+  return (
+    <>
+      <div className="card" style={{ overflowX: 'auto' }}>
+        <div className="card-head">
+          <div className="card-title">Month schedule — {label}</div>
+          <span className="row-inline">
+            <button className="btn btn-sm" onClick={() => shift(-1)} aria-label="Previous month">←</button>
+            <button className="btn btn-sm" onClick={() => shift(1)} aria-label="Next month">→</button>
+          </span>
+        </div>
+        <div style={{ minWidth: 860 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${daysInMonth}, 1fr)`, gap: 2, marginBottom: 6 }}>
+            {days.map((d, i) => (
+              <button key={d} onClick={() => pick(d)} className="mono"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 8.5, color: d === todayISO() ? 'var(--neon-cyan)' : 'var(--ink-3)', padding: 0 }}>
+                {i + 1}
+              </button>
+            ))}
+          </div>
+          <div style={{ position: 'relative' }}>
+            <div style={{ position: 'absolute', inset: 0, display: 'grid', gridTemplateColumns: `repeat(${daysInMonth}, 1fr)`, gap: 2 }} aria-hidden>
+              {days.map((d) => <div key={d} style={{ background: d === todayISO() ? 'color-mix(in oklch, var(--neon-cyan) 8%, transparent)' : 'var(--inset)', borderRadius: 3, opacity: 0.6 }} />)}
+            </div>
+            <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: `repeat(${daysInMonth}, 1fr)`, gap: 2, gridAutoRows: 26 }}>
+              {monthEvents.length === 0 && <div className="muted" style={{ gridColumn: `1 / ${daysInMonth + 1}`, fontSize: 12.5, padding: '14px 4px' }}>No events this month.</div>}
+              {monthEvents.map((e) => {
+                const s = e.start! < days[0] ? 0 : days.indexOf(e.start!);
+                const enIso = (e.end || e.start!) > days[daysInMonth - 1] ? days[daysInMonth - 1] : (e.end || e.start!);
+                const en = Math.max(s, days.indexOf(enIso));
+                const col = v.opColor(e.clientId);
+                const units = data.unitsForEvent(e).length;
+                const asg = data.assignmentsForEvent(e.id).length;
+                return (
+                  <div key={e.id} role="button" tabIndex={0}
+                    onClick={() => open(e.id)} onKeyDown={(k) => { if (k.key === 'Enter') open(e.id); }}
+                    title={`${e.name} · ${units} units · ${asg} crew`}
+                    style={{ gridColumn: `${s + 1} / ${en + 2}`, height: 22, borderRadius: 5, cursor: 'pointer', background: `color-mix(in oklch, ${col} 45%, var(--panel))`, border: `1px solid ${col}`, boxShadow: `0 0 7px color-mix(in oklch, ${col} 30%, transparent)`, display: 'flex', alignItems: 'center', gap: 5, padding: '0 6px', overflow: 'hidden' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.name}</span>
+                    <span className="mono" style={{ fontSize: 8, color: 'var(--ink-2)', flex: 'none' }}>{units}u·{asg}c</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ overflowX: 'auto', marginTop: 14 }}>
+        <div className="card-head"><div className="card-title">Monthly allocations — {label}</div></div>
+        <div style={{ minWidth: 860 }}>
+          <AllocBars totals={totals} label="Daily allocations — crew per day of the month (click a day to zoom in)"
+            colLabel={(_, i) => String(i + 1)} onPick={pick} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ---------- Year view: schedule widget + allocation widget ---------- */
+function YearView({ v, data, open, year, setYear, pickMonth }: {
+  v: { events: EventRec[]; opColor: (c: string) => string; onDay: (d: string) => EventRec[] };
+  data: ReturnType<typeof useOpsData>['data'];
+  open: (id: string) => void;
+  year: number; setYear: (y: number) => void;
+  pickMonth: (y: number, m: number) => void;
+}) {
+  const months = Array.from({ length: 12 }, (_, m) => m);
+  const monthName = (m: number) => new Date(year, m, 1).toLocaleDateString('en-GB', { month: 'short' });
+
+  // aggregate allocations per month: sum the daily totals across the month
+  const monthTotals = months.map((m) => {
+    const daysInMonth = new Date(year, m + 1, 0).getDate();
+    const first = `${year}-${String(m + 1).padStart(2, '0')}-01`;
+    const days = Array.from({ length: daysInMonth }, (_, i) => addDays(first, i));
+    const t = dayTotals(data, v.onDay, days);
+    return {
+      d: `${year}-${String(m + 1).padStart(2, '0')}`,
+      m,
+      need: t.reduce((n, x) => n + x.need, 0),
+      got: t.reduce((n, x) => n + x.got, 0),
+      conf: t.reduce((n, x) => n + x.conf, 0),
+    };
+  });
+
+  const yearEvents = v.events.filter((e) => (e.start || '').startsWith(String(year)) || (e.end || '').startsWith(String(year)));
+
+  return (
+    <>
+      <div className="card">
+        <div className="card-head">
+          <div className="card-title">Year schedule — {year}</div>
+          <span className="row-inline">
+            <button className="btn btn-sm" onClick={() => setYear(year - 1)} aria-label="Previous year">←</button>
+            <button className="btn btn-sm" onClick={() => setYear(year + 1)} aria-label="Next year">→</button>
+          </span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+          {months.map((m) => {
+            const evs = yearEvents
+              .filter((e) => new Date(e.start! + 'T00:00:00').getMonth() === m && new Date(e.start! + 'T00:00:00').getFullYear() === year)
+              .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+            return (
+              <div key={m} style={{ background: 'var(--inset)', border: '1px solid var(--panel-line)', borderRadius: 9, padding: '9px 11px' }}>
+                <button onClick={() => pickMonth(year, m)} className="mono"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10.5, fontWeight: 700, color: 'var(--neon-cyan)', padding: 0, marginBottom: 6, letterSpacing: '.06em' }}>
+                  {monthName(m).toUpperCase()} {evs.length > 0 && <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>· {evs.length}</span>}
+                </button>
+                {evs.length === 0 ? (
+                  <div className="muted" style={{ fontSize: 10.5 }}>—</div>
+                ) : evs.slice(0, 4).map((e) => {
+                  const col = v.opColor(e.clientId);
+                  return (
+                    <div key={e.id} role="button" tabIndex={0}
+                      onClick={() => open(e.id)} onKeyDown={(k) => { if (k.key === 'Enter') open(e.id); }}
+                      title={e.name}
+                      style={{ fontSize: 10.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, padding: '2px 0', overflow: 'hidden' }}>
+                      <span style={{ width: 7, height: 7, borderRadius: 2, background: col, boxShadow: `0 0 5px ${col}`, flex: 'none' }} />
+                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.name}</span>
+                    </div>
+                  );
+                })}
+                {evs.length > 4 && <div className="muted" style={{ fontSize: 9.5 }}>+{evs.length - 4} more</div>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 14 }}>
+        <div className="card-head"><div className="card-title">Annual allocations — {year}</div></div>
+        <AllocBars
+          totals={monthTotals}
+          label="Crew-days allocated vs needed per month (click a month to zoom in)"
+          colLabel={(_, i) => monthName(i)}
+          onPick={(d) => { const m = Number(d.slice(5, 7)) - 1; pickMonth(year, m); }}
+        />
+      </div>
+    </>
   );
 }
 
