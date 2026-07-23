@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useOpsData } from '../data/useOpsData';
-import type { Client, EventRec, TaskCategory } from '../data/types';
-import { TASK_CATEGORIES } from '../data/types';
+import type { Client, EventRec, TaskCategory, Task, TaskStatus, Unit } from '../data/types';
+import { TASK_CATEGORIES, TASK_STATUSES } from '../data/types';
 
 const CAT_COLOR: Record<TaskCategory, string> = {
   Prep: 'var(--blue)', Crew: 'var(--violet)', Stock: 'var(--amber)',
@@ -75,6 +75,9 @@ export default function Tasks() {
         <div className="stat-box"><div className="v">{summary.total}</div><div className="k">Total (incl. done)</div></div>
       </div>
 
+      <ProgressChart data={data} clientId={activeId} />
+      <UnitTaskBoard data={data} clientId={activeId} />
+
       <div className="task-tabs">
         <button className="task-tab" style={{ ['--tabc' as string]: 'var(--ink-2)' }} aria-pressed={filter === 'All'} onClick={() => setFilter('All')}>
           All<span className="n">{summary.open}</span>
@@ -123,5 +126,124 @@ export default function Tasks() {
         })
       )}
     </div>
+  );
+}
+
+type Store = ReturnType<typeof useOpsData>['data'];
+
+/* ---- animated progress chart: event tasks + unit tasks combined ---- */
+function ProgressChart({ data, clientId }: { data: Store; clientId: string }) {
+  const stats = useMemo(() => {
+    const ev = data.tasksForClient(clientId);
+    const unit = data.all<Task>('tasks').filter((t) => t.clientId === clientId);
+    const total = ev.length + unit.length;
+    const done = ev.filter((t) => t.done).length + unit.filter((t) => t.status === 'done').length;
+    const doing = unit.filter((t) => t.status === 'doing').length;
+    return { total, done, doing, open: total - done - doing };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, data.meta().updatedAt]);
+  if (!stats.total) return null;
+
+  const pct = stats.done / stats.total;
+  const R = 34, CIRC = 2 * Math.PI * R;
+  const seg = (n: number) => (stats.total ? (n / stats.total) * 100 : 0);
+  return (
+    <section className="card" style={{ marginTop: 14 }}>
+      <div className="card-head"><div className="card-title">Progress</div>
+        <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>{stats.done}/{stats.total} done</span>
+      </div>
+      <div className="row-inline" style={{ gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+        <svg width={84} height={84} viewBox="0 0 84 84" role="img" aria-label={`${Math.round(pct * 100)}% of tasks done`}>
+          <circle cx={42} cy={42} r={R} fill="none" stroke="var(--inset)" strokeWidth={9} />
+          <circle cx={42} cy={42} r={R} fill="none" stroke="var(--ok)" strokeWidth={9} strokeLinecap="round"
+            strokeDasharray={CIRC} strokeDashoffset={CIRC * (1 - pct)}
+            transform="rotate(-90 42 42)"
+            style={{ transition: 'stroke-dashoffset .9s cubic-bezier(.2,.8,.2,1)' }} />
+          <text x={42} y={47} textAnchor="middle" fill="var(--ok)" fontSize={17} fontWeight={700} fontFamily="var(--font-mono, monospace)">{Math.round(pct * 100)}%</text>
+        </svg>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          {([['done', stats.done, 'var(--ok)'], ['doing', stats.doing, 'var(--accent-2)'], ['open', stats.open, 'var(--warn)']] as const).map(([label, n, col]) => (
+            <div key={label} className="row-inline" style={{ gap: 8, alignItems: 'center', marginBottom: 6 }}>
+              <span className="mono" style={{ width: 44, fontSize: 10.5, color: 'var(--ink-3)', textTransform: 'uppercase' }}>{label}</span>
+              <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'var(--inset)', overflow: 'hidden' }}>
+                <div style={{ width: `${seg(n)}%`, height: '100%', background: col, borderRadius: 4, transition: 'width .9s cubic-bezier(.2,.8,.2,1)' }} />
+              </div>
+              <span className="mono" style={{ width: 26, textAlign: 'right', fontSize: 11.5 }}>{n}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ---- three-column board for the ops (unit) tasks ---- */
+const STATUS_META: Record<TaskStatus, { label: string; col: string }> = {
+  open: { label: 'Open', col: 'var(--warn)' },
+  doing: { label: 'Doing', col: 'var(--accent-2)' },
+  done: { label: 'Done', col: 'var(--ok)' },
+};
+
+function UnitTaskBoard({ data, clientId }: { data: Store; clientId: string }) {
+  const [title, setTitle] = useState('');
+  const [unitId, setUnitId] = useState('');
+  const units = data.unitsForClient(clientId);
+  const tasks = useMemo(
+    () => data.all<Task>('tasks').filter((t) => t.clientId === clientId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [clientId, data.meta().updatedAt]
+  );
+
+  async function add() {
+    if (!title.trim()) return;
+    setTitle('');
+    await data.save<Partial<Task>>('tasks', { clientId, unitId: unitId || undefined, title: title.trim(), status: 'open' });
+  }
+  async function move(t: Task, dir: 1 | -1) {
+    const i = TASK_STATUSES.indexOf(t.status) + dir;
+    if (i < 0 || i >= TASK_STATUSES.length) return;
+    await data.save<Partial<Task>>('tasks', { id: t.id, status: TASK_STATUSES[i] as TaskStatus });
+  }
+
+  return (
+    <section className="card" style={{ marginTop: 14 }}>
+      <div className="card-head"><div className="card-title">Ops board — unit tasks</div>
+        <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>{tasks.length} task{tasks.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div className="row-inline" style={{ marginBottom: 12 }}>
+        <input className="inp" placeholder="Add an ops task" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(); }} />
+        <select className="sel" value={unitId} onChange={(e) => setUnitId(e.target.value)} aria-label="Unit">
+          <option value="">No unit</option>
+          {units.map((u: Unit) => <option key={u.id} value={u.id}>{u.code}</option>)}
+        </select>
+        <button className="btn btn-primary btn-sm" onClick={add} disabled={!title.trim()}>Add</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        {TASK_STATUSES.map((st) => {
+          const meta = STATUS_META[st as TaskStatus];
+          const col = tasks.filter((t) => t.status === st);
+          return (
+            <div key={st} style={{ background: 'var(--inset)', borderRadius: 10, padding: 10, minHeight: 80 }}>
+              <div className="mono" style={{ fontSize: 10.5, color: meta.col, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>{meta.label} · {col.length}</div>
+              {col.map((t) => {
+                const u = t.unitId ? data.get<Unit>('units', t.unitId) : null;
+                return (
+                  <div key={t.id} className="card" style={{ padding: '8px 10px', marginBottom: 8, borderLeft: `2px solid ${meta.col}` }}>
+                    <div style={{ fontSize: 12.5, textDecoration: t.status === 'done' ? 'line-through' : undefined, color: t.status === 'done' ? 'var(--ink-3)' : undefined }}>{t.title}</div>
+                    <div className="row-inline" style={{ marginTop: 6, gap: 6, alignItems: 'center' }}>
+                      {u && <a className="mono" href={`#/unit/${u.id}`} style={{ fontSize: 10.5, color: 'var(--accent)', textDecoration: 'none' }}>{u.code}</a>}
+                      <span style={{ marginLeft: 'auto' }} />
+                      {st !== 'open' && <button className="btn btn-ghost btn-sm" aria-label="Move back" onClick={() => move(t, -1)}>‹</button>}
+                      {st !== 'done' && <button className="btn btn-ghost btn-sm" aria-label="Move forward" onClick={() => move(t, 1)}>›</button>}
+                      <button className="btn btn-ghost btn-sm" aria-label="Delete" onClick={() => data.remove('tasks', t.id)}>✕</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }

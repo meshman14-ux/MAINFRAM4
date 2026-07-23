@@ -84,6 +84,7 @@ export interface Unit {
   crew: number;               // target headcount per unit
   pool?: string[];            // standing pool of staff ids who CAN work it
   checklist?: ChecklistItem[];
+  branchId?: string;          // PAL branch association (mf_pal_branches)
 }
 
 export interface Staff {
@@ -162,6 +163,7 @@ export interface OpsState {
   tasks: Record<string, Task>;
   unitChecklists: Record<string, UnitChecklist>;
   unitInsights: Record<string, UnitInsight>;
+  palBranches: Record<string, PalBranch>;
 }
 
 export interface Cert {
@@ -361,11 +363,19 @@ export interface UnitInsight {
   summaryMonthly?: string;
 }
 
+/** PAL branch — a regional/organisational branch that units associate with. */
+export interface PalBranch {
+  id: string;
+  name: string;
+  region?: string;
+  notes?: string;
+}
+
 export type TableName =
   | 'clients' | 'events' | 'units' | 'staff'
   | 'assignments' | 'stock' | 'applications' | 'timesheets'
   | 'vehicles' | 'invoices' | 'expenses' | 'documents' | 'shoppingLists'
-  | 'tasks' | 'unitChecklists' | 'unitInsights';
+  | 'tasks' | 'unitChecklists' | 'unitInsights' | 'palBranches';
 
 /** Derived compliance result (from staffCompliance). */
 export interface Compliance {

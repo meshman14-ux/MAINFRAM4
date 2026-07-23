@@ -8,7 +8,7 @@
 import type {
   Client, EventRec, Unit, Staff, Assignment, StockLine, Application,
   Timesheet, Vehicle, Invoice, Expense, DocumentRec, ShoppingItem, TableName,
-  Task, UnitChecklist, UnitInsight,
+  Task, UnitChecklist, UnitInsight, PalBranch,
 } from '../data/types';
 
 /* ---- DB table names per logical table ---- */
@@ -29,6 +29,7 @@ export const DB_TABLE: Record<TableName, string> = {
   tasks: 'mf_tasks',
   unitChecklists: 'mf_unit_checklists',
   unitInsights: 'mf_unit_insights',
+  palBranches: 'mf_pal_branches',
 };
 
 /* ---- row -> domain ---- */
@@ -53,6 +54,7 @@ export const fromRow = {
     id: r.id, clientId: r.client_id, type: r.type, code: r.code,
     name: r.name, desc: r.desc ?? undefined, crew: Number(r.crew) || 0,
     pool: r.pool ?? [], checklist: r.checklist ?? [],
+    branchId: r.branch_id ?? undefined,
   }),
   staff: (r: any): Staff => ({
     id: r.id, clientId: r.client_id, name: r.name, role: r.role,
@@ -124,6 +126,9 @@ export const fromRow = {
     insights: r.insights ?? [], summaryDaily: r.summary_daily ?? undefined,
     summaryWeekly: r.summary_weekly ?? undefined, summaryMonthly: r.summary_monthly ?? undefined,
   }),
+  palBranches: (r: any): PalBranch => ({
+    id: r.id, name: r.name, region: r.region ?? undefined, notes: r.notes ?? undefined,
+  }),
 };
 
 /* ---- domain -> row (only defined keys, so partial upserts work) ---- */
@@ -143,7 +148,7 @@ export const toRow = {
   units: (o: Partial<Unit>): any => prune({
     id: o.id, client_id: o.clientId, type: o.type, code: o.code,
     name: o.name, desc: o.desc, crew: o.crew, pool: o.pool,
-    checklist: o.checklist,
+    checklist: o.checklist, branch_id: o.branchId,
   }),
   staff: (o: Partial<Staff>): any => prune({
     id: o.id, client_id: o.clientId, name: o.name, role: o.role,
@@ -208,6 +213,9 @@ export const toRow = {
     health_score: o.healthScore, readiness_score: o.readinessScore,
     insights: o.insights, summary_daily: o.summaryDaily,
     summary_weekly: o.summaryWeekly, summary_monthly: o.summaryMonthly,
+  }),
+  palBranches: (o: Partial<PalBranch>): any => prune({
+    id: o.id, name: o.name, region: o.region, notes: o.notes,
   }),
 };
 

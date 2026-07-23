@@ -187,6 +187,9 @@ export default function CommandCentre() {
           ))}
         </div>
 
+        {/* monthly analytics + compliance evaluation */}
+        <MonthlyChart events={v.events} fin={v.fin.events} rags={v.rags} preps={v.preps} />
+
         {/* season timeline */}
         <div style={{ ...card, marginBottom: 18, paddingBottom: 8 }}>
           <div style={{ ...secLabel(C.cyan), marginBottom: 8 }}>Season timeline</div>
@@ -452,6 +455,73 @@ function MiniList({ title, color, link, empty, rows }: {
           <span style={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 700, color }}>{r.c}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ---- monthly analytics chart + compliance evaluation strip ---- */
+function MonthlyChart({ events, fin, rags, preps }: {
+  events: import('../data/types').EventRec[];
+  fin: import('../data/phase6').EventFinance[];
+  rags: { rag: string }[];
+  preps: { prep: import('../data/phase13').PrepPanel }[];
+}) {
+  const year = new Date().getFullYear();
+  const months = Array.from({ length: 12 }, (_, m) => {
+    const evs = events.filter((e) => {
+      const d = e.start ? new Date(e.start + 'T00:00:00') : null;
+      return d && d.getFullYear() === year && d.getMonth() === m;
+    });
+    const cost = fin
+      .filter((f) => f.start && new Date(f.start + 'T00:00:00').getFullYear() === year && new Date(f.start + 'T00:00:00').getMonth() === m)
+      .reduce((s, f) => s + f.crewCost, 0);
+    return { m, count: evs.length, cost };
+  });
+  const maxCount = Math.max(1, ...months.map((x) => x.count));
+  const maxCost = Math.max(1, ...months.map((x) => x.cost));
+  const nowM = new Date().getMonth();
+
+  const compliancePct = rags.length ? Math.round((rags.filter((r) => r.rag === 'green').length / rags.length) * 100) : 100;
+  const readinessPct = preps.length ? Math.round(preps.reduce((s, p) => s + p.prep.score, 0) / preps.length) : 100;
+  const trend = months[nowM].count - (nowM > 0 ? months[nowM - 1].count : 0);
+  const evalItems = [
+    { k: 'Level compliance', v: `${compliancePct}%`, c: compliancePct >= 80 ? C.green : compliancePct >= 50 ? C.yellow : C.pink },
+    { k: 'Readiness', v: `${readinessPct}%`, c: readinessPct >= 80 ? C.green : readinessPct >= 50 ? C.yellow : C.pink },
+    { k: 'Month trend', v: trend > 0 ? `▲ +${trend}` : trend < 0 ? `▼ ${trend}` : '— level', c: trend > 0 ? C.cyan : trend < 0 ? C.yellow : C.faint },
+  ];
+  const monthName = (m: number) => new Date(year, m, 1).toLocaleDateString('en-GB', { month: 'short' });
+
+  return (
+    <div style={{ ...card, marginBottom: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+        <div style={secLabel(C.accent2)}>Monthly analytics · {year}</div>
+        <span style={{ flex: 1 }} />
+        <span style={{ fontFamily: MONO, fontSize: 10, color: C.faint }}>
+          <span style={{ color: C.cyan }}>■</span> events&nbsp;&nbsp;<span style={{ color: C.pink }}>■</span> crew cost
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 6, alignItems: 'end', height: 92 }}>
+        {months.map((x) => (
+          <div key={x.m} title={`${monthName(x.m)}: ${x.count} event${x.count !== 1 ? 's' : ''}, ${gbp(x.cost)} crew cost`}
+            style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: '100%', outline: x.m === nowM ? `1px solid color-mix(in oklch, ${C.cyan} 40%, transparent)` : undefined, outlineOffset: 2, borderRadius: 3 }}>
+            <div style={{ flex: 1, height: `${(x.count / maxCount) * 100}%`, minHeight: x.count ? 3 : 0, background: C.cyan, borderRadius: '2px 2px 0 0', boxShadow: x.count ? `0 0 8px color-mix(in oklch, ${C.cyan} 50%, transparent)` : undefined, transition: 'height .7s cubic-bezier(.2,.8,.2,1)' }} />
+            <div style={{ flex: 1, height: `${(x.cost / maxCost) * 100}%`, minHeight: x.cost ? 3 : 0, background: C.pink, borderRadius: '2px 2px 0 0', opacity: .85, transition: 'height .7s cubic-bezier(.2,.8,.2,1)' }} />
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 6, marginTop: 4 }}>
+        {months.map((x) => (
+          <div key={x.m} style={{ textAlign: 'center', fontFamily: MONO, fontSize: 8.5, color: x.m === nowM ? C.cyan : C.faint, textTransform: 'uppercase' }}>{monthName(x.m)}</div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 18, marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.line}`, flexWrap: 'wrap' }}>
+        {evalItems.map((it) => (
+          <div key={it.k} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+            <span style={{ fontFamily: MONO, fontSize: 9, color: C.faint, textTransform: 'uppercase', letterSpacing: '.07em' }}>{it.k}</span>
+            <span style={{ fontFamily: MONO, fontSize: 15, fontWeight: 700, color: it.c }}>{it.v}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

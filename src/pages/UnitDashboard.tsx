@@ -10,7 +10,7 @@ import type {
 } from '../data/types';
 import { CHECKLIST_KINDS, TASK_STATUSES } from '../data/types';
 import { unitColor } from '../components/console/unitTheme';
-import { seedItems } from '../lib/research';
+import { seedItems, defaultLabels } from '../lib/research';
 import { analyzeUnit, gatherUnitContext, scoreUnit, ruleInsights } from '../lib/unitAI';
 
 const fmt = (iso?: string) => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
@@ -60,10 +60,11 @@ export default function UnitDashboard() {
           </span>
         </div>
         {unit.desc && <div className="unit-desc">{unit.desc}</div>}
-        <div className="ev-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        <div className="ev-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
           <div className="ev-field"><div className="ev-label">Area</div><div className="fv">{data.areaOfUnit(unit)}</div></div>
           <div className="ev-field"><div className="ev-label">Crew target</div><div className="fv mono">{unit.crew}</div></div>
           <div className="ev-field"><div className="ev-label">Operator</div><div className="fv">{client?.name || '—'}</div></div>
+          <div className="ev-field"><div className="ev-label">PAL branch</div><div className="fv">{data.branchOfUnit(unit)?.name || '—'}</div></div>
           <div className="ev-field"><div className="ev-label">Stock</div><div className="fv mono">{stock.length}{lowStock.length ? ` · ${lowStock.length} low` : ''}</div></div>
         </div>
       </div>
@@ -72,7 +73,10 @@ export default function UnitDashboard() {
       <AIPanel data={data} unit={unit} />
 
       {/* checklists */}
-      <div className="toolbar" style={{ marginTop: 8 }}><h2 style={{ fontFamily: 'var(--font-display)', fontSize: 17 }}>Checklists</h2></div>
+      <div className="toolbar" style={{ marginTop: 8 }}>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 17 }}>Checklists</h2>
+        <DefaultChecklistButton unit={unit} area={data.areaOfUnit(unit)} />
+      </div>
       <div className="unit-grid">
         {CHECKLIST_KINDS.map((kind) => (
           <ChecklistCard key={kind} data={data} unit={unit} kind={kind} />
@@ -153,6 +157,40 @@ function EventTasksCard({ data, events }: { data: ReturnType<typeof useOpsData>[
         </a>
       ))}
     </section>
+  );
+}
+
+/* ---- full default checklist reference for the unit's area ---- */
+function DefaultChecklistButton({ unit, area }: { unit: Unit; area: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setOpen(true)}>
+        See default {area.toLowerCase()} checklist
+      </button>
+      {open && (
+        <div role="dialog" aria-modal="true" aria-label={`Default ${area} checklist`} onClick={() => setOpen(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'color-mix(in oklch, var(--bg) 72%, transparent)', display: 'grid', placeItems: 'center', padding: 20 }}>
+          <div className="card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720, width: '100%', maxHeight: '82vh', overflowY: 'auto' }}>
+            <div className="card-head">
+              <div className="card-title">Default {area} checklist</div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setOpen(false)} aria-label="Close">✕</button>
+            </div>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>The full proposed list for a {area.toLowerCase()} unit — the "Seed default" button on each empty card loads its section.</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
+              {CHECKLIST_KINDS.map((kind) => (
+                <div key={kind}>
+                  <div className="mono" style={{ fontSize: 10.5, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 6 }}>{KIND_LABEL[kind]}</div>
+                  <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12.5, lineHeight: 1.7, color: 'var(--ink-2)' }}>
+                    {defaultLabels(unit.type, kind).map((l) => <li key={l}>{l}</li>)}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

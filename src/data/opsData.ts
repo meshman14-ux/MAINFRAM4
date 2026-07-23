@@ -35,6 +35,7 @@ const PREFIX: Record<TableName, string> = {
   assignments: 'A', stock: 'K', applications: 'P', timesheets: 'T',
   vehicles: 'V', invoices: 'I', expenses: 'X', documents: 'D',
   shoppingLists: 'L', tasks: 'TK', unitChecklists: 'UC', unitInsights: 'IN',
+  palBranches: 'PB',
 };
 
 const AREAS: Area[] = ['Bar', 'Coffee', 'Food', 'General', 'Driver', 'Supervisor'];
@@ -74,7 +75,7 @@ export class OpsData {
       empty until the SQL is run. Core tables still fail loudly. */
   private static OPTIONAL_TABLES: TableName[] = [
     'timesheets', 'vehicles', 'invoices', 'expenses', 'documents', 'shoppingLists',
-    'tasks', 'unitChecklists', 'unitInsights',
+    'tasks', 'unitChecklists', 'unitInsights', 'palBranches',
   ];
 
   // Load-once guard lives on the store (not a module global) so reset() can
@@ -559,6 +560,9 @@ export class OpsData {
   }
   insightForUnit(uid: string): import('./types').UnitInsight | null {
     return this.insightsForUnit(uid)[0] || null;
+  }
+  branchOfUnit(u: Unit | null): import('./types').PalBranch | null {
+    return u?.branchId ? this.get<import('./types').PalBranch>('palBranches', u.branchId) : null;
   }
   eventsForUnit(uid: string): EventRec[] {
     const unit = this.get<Unit>('units', uid);
@@ -1462,7 +1466,7 @@ function emptyState(): OpsState {
     certs: {}, availability: {}, pipeline: {}, movements: {}, eventTasks: {},
     timesheets: {},
     vehicles: {}, invoices: {}, expenses: {}, documents: {}, shoppingLists: {},
-    tasks: {}, unitChecklists: {}, unitInsights: {},
+    tasks: {}, unitChecklists: {}, unitInsights: {}, palBranches: {},
   };
 }
 
