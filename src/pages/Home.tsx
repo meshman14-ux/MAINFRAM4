@@ -1,25 +1,20 @@
+/* Home — the calm page. One glance answers "is everything OK, and what
+   needs me today?" in plain English: big status tiles (each one a link
+   to the fix), the next event, and the top three actions. Everything
+   dense — graphs, pins, per-vendor detail — lives in Command Centre. */
 import { useMemo } from 'react';
 import { useOpsData } from '../data/useOpsData';
-import {
-  homeKpis, needsAction, eventRows, nextEventConfirmations,
-} from '../data/home';
+import { homeKpis, needsAction, eventRows } from '../data/home';
 
 const fmtDate = (iso?: string) =>
-  iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+  iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
 
 export default function Home() {
   const { data, ready, error } = useOpsData();
 
-  // Recompute derived views whenever the store changes (ready flips + emits).
   const view = useMemo(() => {
     if (!ready) return null;
-    return {
-      kpis: homeKpis(data),
-      actions: needsAction(data),
-      rows: eventRows(data),
-      confirmations: nextEventConfirmations(data),
-    };
-    // `ready` is the signal; data is a stable singleton.
+    return { kpis: homeKpis(data), actions: needsAction(data), rows: eventRows(data) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, data, data.meta().updatedAt]);
 
@@ -32,25 +27,16 @@ export default function Home() {
       </div>
     );
   }
-
   if (!ready || !view) {
     return (
       <div className="state">
-        <div>
-          <div className="spinner" />
-          <div className="eyebrow">Loading operations</div>
-        </div>
+        <div><div className="spinner" /><div className="eyebrow">Loading operations</div></div>
       </div>
     );
   }
 
-  const { kpis, actions, rows, confirmations } = view;
+  const { kpis, actions, rows } = view;
   const isFirstRun = data.all('clients').length === 0;
-
-  async function markConfirmed(assignmentId: string, current: boolean) {
-    // Toggle the confirmed flag; optimistic + persisted via the store.
-    await data.save('assignments', { id: assignmentId, confirmed: !current });
-  }
 
   if (isFirstRun) {
     return (
@@ -69,166 +55,97 @@ export default function Home() {
     );
   }
 
+  const next = rows[0] || null;
+  const problems = kpis.crewGaps + kpis.unconfirmed + kpis.stockLow + kpis.complianceAlerts + kpis.blockedEvents;
+  const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  /* Plain-English tiles: what it is, whether it's fine, where to fix it. */
+  const tiles: { label: string; value: number | string; sub: string; href: string; ok: boolean }[] = [
+    { label: 'Events coming up', value: kpis.eventsAhead, sub: 'across all operators', href: '#/events', ok: true },
+    { label: 'Crew to sort', value: kpis.crewGaps + kpis.unconfirmed, sub: kpis.crewGaps + kpis.unconfirmed ? `${kpis.crewGaps} unfilled · ${kpis.unconfirmed} unconfirmed` : 'everyone booked & confirmed', href: '#/callouts', ok: kpis.crewGaps + kpis.unconfirmed === 0 },
+    { label: 'Stock to reorder', value: kpis.stockLow, sub: kpis.stockLow ? 'lines below par' : 'everything at par', href: '#/stock', ok: kpis.stockLow === 0 },
+    { label: 'Compliance to fix', value: kpis.complianceAlerts, sub: kpis.complianceAlerts ? 'items missing or expiring' : 'all in date', href: '#/compliance', ok: kpis.complianceAlerts === 0 },
+    { label: 'Events blocked', value: kpis.blockedEvents, sub: kpis.blockedEvents ? 'required compliance missing' : 'nothing blocked', href: '#/readiness', ok: kpis.blockedEvents === 0 },
+  ];
+
   return (
-    <>
-      <KpiRow kpis={kpis} />
-
-      <div className="page" style={{ paddingTop: 0 }}>
-        <div className="grid-2">
-          {/* LEFT: needs action + events register */}
-          <div>
-            <section className="card" aria-labelledby="needs-action-h">
-              <div className="card-head">
-                <div className="card-title" id="needs-action-h">
-                  Needs action <span className="pill">{actions.length}</span>
-                </div>
-              </div>
-              {actions.length === 0 ? (
-                <Empty label="All clear — nothing needs attention." />
-              ) : (
-                actions.map((a, i) => (
-                  <div className="action-row" key={i}>
-                    <span className="tag" data-kind={a.kind}>{a.kind}</span>
-                    <span className="action-msg">{stripEventPrefix(a.message, a.eventName)}</span>
-                    <a className="action-go" href={`#/event/${a.eventId}`} aria-label={`Open ${a.eventName}`}>→</a>
-                  </div>
-                ))
-              )}
-            </section>
-
-            <section className="card" aria-labelledby="register-h">
-              <div className="card-head">
-                <div className="card-title" id="register-h">Events register · all operators</div>
-                <a className="link-btn" href="#/events">Full register →</a>
-              </div>
-              {rows.length === 0 ? (
-                <Empty label="No upcoming events. Create one in the Events register." />
-              ) : (
-                rows.map((r) => (
-                  <a
-                    className="event-row"
-                    key={r.id}
-                    href={`#/event/${r.id}`}
-                    style={{ ['--evc' as string]: r.color }}
-                  >
-                    <div className="event-top">
-                      <span className="event-name">{r.name}</span>
-                      <span className="event-client">{r.clientName}</span>
-                      <span className="event-countdown">{r.countdownLabel}</span>
-                    </div>
-                    <div className="event-meta">
-                      <span><span className="k">Dates</span>{fmtDate(r.start)}{r.end && r.end !== r.start ? ` – ${fmtDate(r.end)}` : ''}</span>
-                      <span><span className="k">Loc</span>{r.loc || '—'}</span>
-                      <span><span className="k">Units</span>{r.units}</span>
-                      <span><span className="k">Crew</span>{r.filled}/{r.need}</span>
-                      <span className={r.confirmed === r.filled && r.filled > 0 ? 'chip-ok' : ''}>
-                        <span className="k">Conf</span>{r.confirmed} confirmed
-                      </span>
-                      <span className={r.stockLow > 0 ? 'chip-low' : 'chip-ok'}>
-                        <span className="k">Stock</span>{r.stockLow > 0 ? `${r.stockLow} low` : 'ok'}
-                      </span>
-                    </div>
-                  </a>
-                ))
-              )}
-            </section>
-          </div>
-
-          {/* RIGHT: crew confirmations for the next event */}
-          <div>
-            <section className="card" aria-labelledby="confirm-h">
-              <div className="confirm-head">
-                <div className="card-title" id="confirm-h">Crew confirmations</div>
-                <span className="confirm-count">
-                  {confirmations.confirmed} / {confirmations.total} confirmed
-                </span>
-              </div>
-              {confirmations.event ? (
-                <>
-                  <div className="confirm-call">
-                    {confirmations.event.name} · crew call {confirmations.event.callTime || '—'} · {fmtDate(confirmations.event.start)}
-                  </div>
-                  {confirmations.rows.length === 0 ? (
-                    <Empty label="No crew assigned yet." />
-                  ) : (
-                    confirmations.rows.map((c) => (
-                      <div className="confirm-row" key={c.assignmentId}>
-                        <div>
-                          <div className="crew-name">{c.staffName}</div>
-                          <div className="crew-meta">{c.unitCode} · {c.unitName}</div>
-                        </div>
-                        {c.phone ? (
-                          <a
-                            className="btn btn-wa"
-                            href={waLink(c.phone, confirmations.event!.name, confirmations.event!.callTime)}
-                            target="_blank" rel="noreferrer"
-                          >
-                            WhatsApp
-                          </a>
-                        ) : <span />}
-                        <button
-                          className="btn btn-mark"
-                          onClick={() => markConfirmed(c.assignmentId, c.confirmed)}
-                          aria-pressed={c.confirmed}
-                        >
-                          {c.confirmed ? '✓ Confirmed' : 'Mark ✓'}
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </>
-              ) : (
-                <Empty label="No upcoming event to confirm crew for." />
-              )}
-            </section>
-          </div>
+    <div className="page">
+      {/* greeting */}
+      <div style={{ margin: '10px 0 22px' }}>
+        <div className="eyebrow">{today}</div>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 26, margin: '6px 0 4px' }}>
+          {problems === 0 ? 'All clear — everything is under control.' : `${problems} thing${problems !== 1 ? 's' : ''} need${problems === 1 ? 's' : ''} your attention.`}
+        </h1>
+        <div className="muted" style={{ fontSize: 14 }}>
+          Tap a tile to go straight to the fix, or open the{' '}
+          <a href="#/command" style={{ color: 'var(--accent)' }}>Command Centre</a> for the full picture.
         </div>
       </div>
-    </>
-  );
-}
 
-/* Status tiles — each deep-links to the page already filtered to the
-   state the tile counts (sketch notes §1). */
-function KpiRow({ kpis }: { kpis: ReturnType<typeof homeKpis> }) {
-  const tiles: { label: string; value: number | string; sub: string; href: string; color?: string }[] = [
-    { label: 'Operators', value: kpis.operators, sub: 'entities on system', href: '#/accounts' },
-    { label: 'Events ahead', value: kpis.eventsAhead, sub: 'all operators', href: '#/events', color: 'var(--blue)' },
-    { label: 'Crew confirmation', value: kpis.crewGaps + kpis.unconfirmed, sub: `${kpis.crewGaps} unfilled · ${kpis.unconfirmed} unconfirmed`, href: '#/callouts', color: 'var(--violet)' },
-    { label: 'Stock low', value: kpis.stockLow, sub: 'lines below par', href: '#/stock', color: 'var(--pink)' },
-    { label: 'Compliance alerts', value: kpis.complianceAlerts, sub: 'crew items + required checks', href: '#/compliance', color: 'var(--amber)' },
-    { label: 'Event readiness', value: kpis.blockedEvents, sub: 'events hard-gated', href: '#/readiness', color: kpis.blockedEvents ? 'var(--red)' : 'var(--green)' },
-  ];
-  return (
-    <div className="page" style={{ paddingBottom: 0 }}>
-      <div className="kpis">
+      {/* status tiles */}
+      <div className="kpis" style={{ marginBottom: 24 }}>
         {tiles.map((t) => (
-          <a className="kpi" key={t.label} href={t.href} style={{ textDecoration: 'none', color: 'inherit' }}>
+          <a className="kpi home-tile" key={t.label} href={t.href} data-ok={t.ok}>
             <div className="label">{t.label}</div>
-            <div className="value" style={{ color: t.color }}>{t.value}</div>
+            <div className="value" style={{ color: t.ok ? 'var(--ok)' : 'var(--warn)' }}>{t.value}</div>
             <div className="sub">{t.sub}</div>
           </a>
         ))}
       </div>
+
+      <div className="grid-2">
+        {/* next event hero */}
+        <section className="card">
+          <div className="card-head"><div className="card-title">Next event</div></div>
+          {!next ? (
+            <div className="muted" style={{ fontSize: 14 }}>Nothing booked ahead. <a href="#/console" style={{ color: 'var(--accent)' }}>Create an event →</a></div>
+          ) : (
+            <div style={{ ['--evc' as string]: next.color }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <span className="ev-swatch" style={{ color: next.color }} />
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700 }}>{next.name}</span>
+                <span className="reg-badge" data-status={next.daysOut <= 0 ? 'live' : undefined} style={{ marginLeft: 'auto' }}>{next.countdownLabel}</span>
+              </div>
+              <div className="muted" style={{ fontSize: 13.5, margin: '6px 0 14px' }}>
+                {next.clientName} · {next.loc || 'location TBC'} · {fmtDate(next.start)}{next.end && next.end !== next.start ? ` – ${fmtDate(next.end)}` : ''}
+              </div>
+              <div className="reg-staffbar" data-ok={next.need > 0 && next.filled >= next.need}>
+                <span className="bar"><span style={{ width: `${next.need ? Math.min(100, Math.round((next.filled / next.need) * 100)) : 0}%` }} /></span>
+                <span className="mono">{next.filled}/{next.need} crew · {next.confirmed} confirmed{next.stockLow ? ` · ${next.stockLow} stock low` : ''}</span>
+              </div>
+              <div className="row-inline" style={{ marginTop: 16 }}>
+                <a className="btn btn-primary" href={`#/event/${next.id}`} style={{ textDecoration: 'none' }}>Open the event →</a>
+                <a className="btn btn-ghost" href="#/readiness" style={{ textDecoration: 'none' }}>Check readiness</a>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* what needs you today */}
+        <section className="card">
+          <div className="card-head">
+            <div className="card-title">What needs you today</div>
+            {actions.length > 3 && <a href="#/command" style={{ fontSize: 12.5, color: 'var(--accent)' }}>All {actions.length} →</a>}
+          </div>
+          {actions.length === 0 ? (
+            <div className="muted" style={{ fontSize: 14 }}>Nothing — enjoy the quiet. ✓</div>
+          ) : (
+            actions.slice(0, 3).map((a, i) => (
+              <div className="action-row" key={i}>
+                <span className="action-tag" style={{ color: a.color }}>{a.kind}</span>
+                <span style={{ fontSize: 13.5, lineHeight: 1.5 }}>{a.message}</span>
+                <a className="action-go" href={`#/event/${a.eventId}`} aria-label={`Open ${a.eventName}`}>→</a>
+              </div>
+            ))
+          )}
+          <div className="row-inline" style={{ marginTop: 18, flexWrap: 'wrap' }}>
+            <a className="btn btn-sm" href="#/command" style={{ textDecoration: 'none' }}>Command Centre</a>
+            <a className="btn btn-sm" href="#/console" style={{ textDecoration: 'none' }}>Console</a>
+            <a className="btn btn-sm" href="#/calendar" style={{ textDecoration: 'none' }}>Calendar</a>
+            <a className="btn btn-sm" href="#/timesheets" style={{ textDecoration: 'none' }}>Timesheets</a>
+          </div>
+        </section>
+      </div>
     </div>
   );
-}
-
-function Empty({ label }: { label: string }) {
-  return <div style={{ color: 'var(--ink-3)', fontSize: 14, padding: '8px 2px' }}>{label}</div>;
-}
-
-/** The event name is already shown as a tag/heading; trim the leading
- *  "Name — " from messages so rows read cleanly. */
-function stripEventPrefix(message: string, name: string): string {
-  const p = `${name} — `;
-  return message.startsWith(p) ? message.slice(p.length) : message;
-}
-
-function waLink(phone: string, eventName: string, callTime?: string): string {
-  const text = encodeURIComponent(
-    `Hi — confirming you for ${eventName}${callTime ? `, crew call ${callTime}` : ''}. Can you confirm? Thanks.`
-  );
-  const num = phone.replace(/[^\d]/g, '');
-  return `https://wa.me/${num}?text=${text}`;
 }

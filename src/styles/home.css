@@ -242,3 +242,12 @@
   .action-row { grid-template-columns: 72px 1fr; }
   .action-go { display: none; }
 }
+
+/* simplified Home: tiles carry a calm ok/attention accent and lift on hover */
+.home-tile { text-decoration: none; color: inherit; transition: transform 0.16s, box-shadow 0.16s, border-color 0.16s; }
+.home-tile[data-ok="false"] { border-color: color-mix(in oklch, var(--warn) 45%, var(--panel-line)); }
+.home-tile:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow: var(--glow-sm) color-mix(in oklch, var(--accent) 40%, transparent);
+}

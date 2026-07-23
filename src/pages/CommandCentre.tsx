@@ -1,377 +1,457 @@
-import { useMemo, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { useOpsData } from '../data/useOpsData';
+import type { Client, Staff, Unit, Vehicle, DocumentRec, ShoppingItem, Timesheet } from '../data/types';
+import { EventTimeline } from '../components/console/EventTimeline';
+import { eventStatus } from '../components/console/eventStatus';
+import { unitColor } from '../components/console/unitTheme';
+import { clientFinance, reorderForClient } from '../data/phase6';
+import { clientPnL, docState } from '../data/phase12';
+import { personalRag, prepPanel, calloutFill } from '../data/phase13';
 
 /* ============================================================
-   CommandCentre — the top-level operations dashboard, ported
-   from the Home.dc.html prototype into the live app.
-   Sections: KPI strip · Needs Action alerts · Events Register ·
-   Crew Confirmations (WhatsApp + mark) · Modules grid · the
-   highly-visual all-operators events table.
-
-   Reads through the central store (useOpsData). To stay drop-in
-   safe it computes from raw tables (data.all/get) with small
-   local helpers, so it does not depend on any particular helper
-   method existing on the store.
+   CommandCentre — the DENSE per-vendor cockpit. Where Home is
+   calm and plain-English, this packs everything about one
+   operator onto one screen: a KPI wall, money/compliance
+   donuts, crew-cost bars, readiness gauges, the season
+   timeline, a pinboard, alerts, confirmations with WhatsApp
+   chase, ops mini-widgets and the full schedule table.
+   Deliberately its own visual language (mono, tight, glowing).
    ============================================================ */
 
-// ---- palette (matches the neon theme tokens) ----
 const C = {
-  text: 'var(--ink, oklch(0.97 0.005 260))',
-  muted: 'var(--ink-2, oklch(0.72 0.02 260))',
-  faint: 'var(--ink-3, oklch(0.52 0.02 260))',
-  accent: 'var(--accent, oklch(0.72 0.19 250))',
-  accent2: 'var(--neon-purple, oklch(0.62 0.25 295))',
-  ok: 'var(--ok, oklch(0.80 0.21 150))',
-  warn: 'var(--warn, oklch(0.75 0.18 55))',
-  danger: 'var(--danger, oklch(0.70 0.24 350))',
-  panel: 'var(--surface, oklch(0.165 0.025 268 / 0.7))',
-  panel2: 'var(--surface-2, oklch(0.21 0.028 268 / 0.8))',
-  line: 'var(--line, oklch(0.32 0.035 268))',
-  bg: 'var(--bg, oklch(0.13 0.022 268))',
+  text: 'var(--ink)', muted: 'var(--ink-2)', faint: 'var(--ink-3)',
+  accent: 'var(--accent)', accent2: 'var(--accent-2)',
+  ok: 'var(--ok)', warn: 'var(--warn)', danger: 'var(--danger)',
+  cyan: 'var(--neon-cyan)', pink: 'var(--neon-pink)', green: 'var(--neon-green)',
+  yellow: 'var(--neon-yellow)', blue: 'var(--neon-blue)',
+  panel: 'var(--surface, var(--panel))', panel2: 'var(--surface-2, var(--panel-2))',
+  line: 'var(--line, var(--panel-line))', bg: 'var(--bg)',
 };
-const PALETTE = [C.accent, C.accent2, C.ok, C.warn, C.danger];
 const MONO = "'JetBrains Mono', ui-monospace, monospace";
-
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const fmt = (iso?: string) => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
-const daysBetween = (a: string, b: string) => Math.round((new Date(a + 'T00:00:00').getTime() - new Date(b + 'T00:00:00').getTime()) / 86400000);
+const gbp = (n: number) => '£' + Math.round(n).toLocaleString('en-GB');
 
-export interface CommandCentreProps {
-  /** navigate within the app (e.g. hash route). Defaults to setting window.location.hash */
-  onNavigate?: (route: string) => void;
-}
+const card: CSSProperties = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: '16px 18px' };
+const secLabel = (color: string): CSSProperties => ({ fontSize: 11, fontWeight: 600, color, fontFamily: MONO, letterSpacing: '.07em', textTransform: 'uppercase' });
 
-export default function CommandCentre({ onNavigate }: CommandCentreProps) {
+interface Pin { id: string; text: string; tone: string; }
+const PIN_TONES = ['var(--neon-cyan)', 'var(--neon-pink)', 'var(--neon-yellow)', 'var(--neon-green)', 'var(--accent-2)'];
+
+export default function CommandCentre() {
   const { data, ready, error } = useOpsData();
-  const go = onNavigate || ((r: string) => { window.location.hash = r; });
+  const [clientId, setClientId] = useState('');
+  const [pinText, setPinText] = useState('');
 
-  const vals = useMemo(() => {
-    const today = todayISO();
-    const clients = ready ? data.all<any>('clients') : [];
-    const allEvents = ready ? data.all<any>('events') : [];
-    const allUnits = ready ? data.all<any>('units') : [];
-    const allStaff = ready ? data.all<any>('staff') : [];
-    const allStock = ready ? data.all<any>('stock') : [];
-    const allAsg = ready ? data.all<any>('assignments') : [];
-
-    // local helpers (independent of store helper names)
-    const unitsForClient = (cid: string) => allUnits.filter((u) => u.clientId === cid);
-    const staffForClient = (cid: string) => allStaff.filter((s) => s.clientId === cid);
-    const asgForEvent = (eid: string) => allAsg.filter((a) => a.eventId === eid);
-    const lowStockForClient = (cid: string) => allStock.filter((s) => {
-      const unit = allUnits.find((u) => u.id === s.unitId);
-      return unit && unit.clientId === cid && s.par != null && Number(s.qty) < Number(s.par);
-    });
-    const cname = (cid: string) => (clients.find((c) => c.id === cid)?.name) || '';
-    const statusOf = (e: any) => {
-      const s = e.start || '', en = e.end || e.start || '';
-      if (en < today) return 'past'; if (s <= today && today <= en) return 'live'; return 'upcoming';
-    };
-
-    const upcoming = allEvents
-      .filter((e) => (e.end || e.start || '') >= today)
-      .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
-
-    const evStats = upcoming.map((e) => {
-      const units = unitsForClient(e.clientId);
-      const target = units.reduce((n, u) => n + (Number(u.crew) || 0), 0);
-      const asgs = asgForEvent(e.id);
-      const confirmed = asgs.filter((a) => a.confirmed).length;
-      const low = lowStockForClient(e.clientId).length;
-      const days = Math.max(0, daysBetween(e.start || today, today));
-      return { e, units, target, asgs, confirmed, low, days };
-    });
-
-    // ---- alerts ----
-    const alerts: any[] = [];
-    evStats.forEach((s) => {
-      if (s.target > 0 && s.asgs.length < s.target && s.days <= 30)
-        alerts.push({ kind: 'STAFFING', color: C.warn, route: `#/console/${encodeURIComponent(s.e.clientId)}`,
-          text: `${s.e.name} — ${s.target - s.asgs.length} crew short (${s.asgs.length}/${s.target}), ${s.days === 0 ? 'starts today' : s.days + ' days out'}` });
-      if (s.asgs.length > 0 && s.confirmed < s.asgs.length && s.days <= 14)
-        alerts.push({ kind: 'CONFIRM', color: C.accent2, route: '#/command',
-          text: `${s.e.name} — ${s.asgs.length - s.confirmed} of ${s.asgs.length} crew not yet confirmed` });
-    });
-    clients.forEach((c) => {
-      const low = lowStockForClient(c.id);
-      if (low.length) alerts.push({ kind: 'STOCK', color: C.danger, route: '#/stock',
-        text: `${c.name} — ${low.length} stock line${low.length > 1 ? 's' : ''} below par (${low.slice(0, 3).map((s) => s.item).join(', ')}${low.length > 3 ? '…' : ''})` });
-      const rtw = staffForClient(c.id).filter((s) => s.rtw && s.rtw !== 'Verified');
-      if (rtw.length) alerts.push({ kind: 'RTW', color: C.warn, route: '#/compliance',
-        text: `${c.name} — right-to-work pending: ${rtw.map((s) => s.name).join(', ')}` });
-    });
-
-    // ---- events list (left column) ----
-    const events = evStats.map((s) => {
-      const crewOk = s.asgs.length >= s.target && s.target > 0;
-      const confOk = s.asgs.length > 0 && s.confirmed === s.asgs.length;
-      return {
-        name: s.e.name, client: cname(s.e.clientId).toUpperCase(), route: `#/event/${s.e.id}`,
-        when: fmt(s.e.start) + (s.e.end && s.e.end !== s.e.start ? ` – ${fmt(s.e.end)}` : '') + (s.e.loc ? ` · ${s.e.loc}` : ''),
-        units: s.units.map((u) => u.code).join(' · ') || 'no units',
-        countdown: s.days === 0 ? 'TODAY' : `T-${s.days}`, dColor: s.days <= 7 ? C.warn : C.faint,
-        crew: `${s.asgs.length}/${s.target}`, crewColor: crewOk ? C.ok : C.warn,
-        conf: `${s.confirmed} confirmed`, confColor: confOk ? C.ok : C.accent2,
-        stock: s.low ? `${s.low} stock low` : 'stock ok', stockColor: s.low ? C.danger : C.ok,
-      };
-    });
-
-    // ---- crew confirmations for the next event ----
-    const nxt = evStats[0] || null;
-    let confs: any[] = [], confEventName = '', confSummary = '', confSummaryColor = C.faint;
-    if (nxt) {
-      confEventName = `${nxt.e.name} · crew call ${nxt.e.callTime || 'TBC'} · ${fmt(nxt.e.start)}`;
-      confSummary = `${nxt.confirmed} / ${nxt.asgs.length} confirmed`;
-      confSummaryColor = (nxt.asgs.length && nxt.confirmed === nxt.asgs.length) ? C.ok : C.warn;
-      confs = nxt.asgs.map((a) => {
-        const st = data.get<any>('staff', a.staffId) || {};
-        const un = data.get<any>('units', a.unitId) || {};
-        const first = (st.name || '').split(' ')[0];
-        return {
-          id: a.id, name: st.name || '?', unit: `${un.code || ''} · ${un.name || ''}`,
-          pending: !a.confirmed, done: !!a.confirmed,
-          chase: () => {
-            const msg = `Hi ${first}, confirming your shift: ${nxt.e.name} at ${nxt.e.loc || ''} on ${nxt.e.start || ''}, crew call ${nxt.e.callTime || 'TBC'}, unit ${un.code || ''}. Reply YES to confirm.`;
-            window.open(`https://wa.me/${String(st.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
-          },
-          confirm: () => data.save('assignments', { id: a.id, confirmed: true }),
-          unconfirm: () => data.save('assignments', { id: a.id, confirmed: false }),
-        };
-      });
-    }
-
-    // ---- all-operators events table ----
-    const table = allEvents.map((e) => {
-      const units = unitsForClient(e.clientId);
-      const target = units.reduce((n, u) => n + (Number(u.crew) || 0), 0);
-      const asgs = asgForEvent(e.id);
-      const conf = asgs.filter((a) => a.confirmed).length;
-      const low = lowStockForClient(e.clientId).length;
-      const st = statusOf(e);
-      const days = daysBetween(e.start || today, today);
-      const crewPct = target ? Math.min(100, Math.round(asgs.length / target * 100)) : 0;
-      const confPct = asgs.length ? Math.round(conf / asgs.length * 100) : 0;
-      const idx = Math.max(0, clients.findIndex((c) => c.id === e.clientId));
-      const color = PALETTE[idx % PALETTE.length];
-      const crewOk = asgs.length >= target && target > 0;
-      const span = e.start ? (e.end && e.end !== e.start ? daysBetween(e.end, e.start) + 1 : 1) : 0;
-      return {
-        sortKey: (st === 'past' ? '2' : st === 'live' ? '0' : '1') + (e.start || 'zzz'),
-        route: `#/event/${e.id}`,
-        op: cname(e.clientId) || '—', opColor: color,
-        opInitials: (cname(e.clientId) || '?').split(/\s+/).map((w: string) => w[0]).join('').slice(0, 2).toUpperCase(),
-        name: e.name || 'Untitled', loc: e.loc || '—',
-        dates: fmt(e.start) + (e.end && e.end !== e.start ? ` – ${fmt(e.end)}` : ''),
-        daysInfo: span ? `${span} day${span > 1 ? 's' : ''}` : 'no dates',
-        countdown: st === 'live' ? 'LIVE' : (st === 'past' ? 'DONE' : (days <= 0 ? 'TODAY' : `T-${days}`)),
-        cdColor: st === 'live' ? C.ok : (st === 'past' ? C.faint : (days <= 7 ? C.warn : C.accent)),
-        units: units.map((u) => u.code), noUnits: units.length === 0,
-        crewLabel: `${asgs.length} / ${target}`, crewPct: crewPct + '%', crewColor: crewOk ? C.ok : C.warn,
-        confLabel: `${conf} / ${asgs.length}`, confPct: confPct + '%', confColor: (asgs.length && conf === asgs.length) ? C.ok : C.accent2,
-        stock: low ? `${low} low` : 'ok', stockColor: low ? C.danger : C.ok,
-        status: ({ upcoming: 'UPCOMING', live: 'LIVE', past: 'DONE' } as any)[st],
-        statusColor: ({ upcoming: C.accent2, live: C.ok, past: C.faint } as any)[st],
-      };
-    }).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-
-    // ---- KPIs ----
-    const totalGap = evStats.reduce((n, s) => n + Math.max(0, s.target - s.asgs.length), 0);
-    const totalLow = clients.reduce((n, c) => n + lowStockForClient(c.id).length, 0);
-    const unconf = evStats.reduce((n, s) => n + (s.asgs.length - s.confirmed), 0);
-    const kpis = [
-      { label: 'Operators', value: String(clients.length), sub: 'entities on system', color: C.text },
-      { label: 'Events ahead', value: String(upcoming.length), sub: 'all operators', color: C.accent2 },
-      { label: 'Crew gaps', value: String(totalGap), sub: 'positions unfilled', color: totalGap ? C.warn : C.ok },
-      { label: 'Unconfirmed', value: String(unconf), sub: 'shifts not confirmed', color: unconf ? C.accent2 : C.ok },
-      { label: 'Stock low', value: String(totalLow), sub: 'lines below par', color: totalLow ? C.danger : C.ok },
-    ];
-
-    return { kpis, alerts, events, confs, confEventName, confSummary, confSummaryColor, table };
+  const clients = useMemo(
+    () => (ready ? data.all<Client>('clients') : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, data.meta().updatedAt]);
+    [ready, data.meta().updatedAt]
+  );
+  const activeId = clientId || clients[0]?.id || '';
+  const vendor = clients.find((c) => c.id === activeId) || null;
 
-  const modules = [
-    { label: 'Ops Console', sub: 'events · units · crew · stock', route: '#/console' },
-    { label: 'Events Register', sub: 'all events · full details', route: '#/events' },
-    { label: 'Events Calendar', sub: 'month view', route: '#/calendar' },
-    { label: 'Callouts', sub: 'recruit & approve crew', route: '#/callouts' },
-    { label: 'Compliance', sub: 'certs, RTW & expiry', route: '#/compliance' },
-    { label: 'Staff Hub', sub: 'per-person profiles', route: '#/staff' },
-    { label: 'Logistics', sub: 'journeys & routes', route: '#/logistics' },
-    { label: 'Finance', sub: 'per-client P&L', route: '#/finance' },
-  ];
+  const v = useMemo(() => {
+    if (!ready || !activeId) return null;
+    const today = todayISO();
+    const events = data.eventsForClient(activeId).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+    const upcoming = events.filter((e) => (e.end || e.start || '') >= today);
+    const staff = data.staffForClient(activeId);
+    const units = data.unitsForClient(activeId);
+    const rags = staff.map((s) => personalRag(data, s));
+    const pnl = clientPnL(data, activeId);
+    const fin = clientFinance(data, activeId);
+    const lowStock = reorderForClient(data, activeId);
+    const fleet = data.all<Vehicle>('vehicles').filter((x) => x.clientId === activeId);
+    const docs = data.all<DocumentRec>('documents').filter((x) => x.clientId === activeId);
+    const docsFlagged = docs.filter((x) => { const s = docState(x); return s === 'expired' || s === 'expiring'; });
+    const shoppingOpen = data.all<ShoppingItem>('shoppingLists')
+      .filter((s) => !s.done && units.some((u) => u.id === s.unitId)).length;
+    const logi = data.logisticsSummary(activeId);
+    const timesheetsPending = data.all<Timesheet>('timesheets')
+      .filter((t) => t.status === 'submitted' && events.some((e) => e.id === t.eventId)).length;
 
-  const card: CSSProperties = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: '18px 20px' };
-  const secLabel = (color: string): CSSProperties => ({ fontSize: 12, fontWeight: 600, color, fontFamily: MONO, letterSpacing: '.05em' });
+    const preps = upcoming.slice(0, 6).map((e) => ({ e, prep: prepPanel(data, e), color: data.eventColor(e.id) }));
+    const fills = upcoming.map((e) => calloutFill(data, e));
+    const crewGaps = fills.reduce((n, f) => n + Math.max(0, f.needed - f.filled), 0);
+    const assigns = upcoming.flatMap((e) => data.assignmentsForEvent(e.id));
+    const unconfirmed = assigns.filter((a) => !a.confirmed).length;
+
+    // alerts for this vendor
+    const alerts: { kind: string; color: string; route: string; text: string }[] = [];
+    preps.forEach(({ e, prep }) => {
+      if (prep.blocked) alerts.push({ kind: 'BLOCKED', color: C.danger, route: '#/readiness', text: `${e.name} — hard-gated: ${prep.blockers[0]}` });
+    });
+    upcoming.forEach((e) => {
+      const f = calloutFill(data, e);
+      if (f.needed > f.filled) alerts.push({ kind: 'STAFFING', color: C.warn, route: '#/callouts', text: `${e.name} — ${f.needed - f.filled} position${f.needed - f.filled !== 1 ? 's' : ''} unfilled (${f.filled}/${f.needed})` });
+      const asg = data.assignmentsForEvent(e.id);
+      const unconf = asg.filter((a) => !a.confirmed).length;
+      if (unconf) alerts.push({ kind: 'CONFIRM', color: C.accent2, route: '#/command', text: `${e.name} — ${unconf} of ${asg.length} crew not confirmed` });
+    });
+    if (lowStock.length) alerts.push({ kind: 'STOCK', color: C.yellow, route: '#/stock', text: `${lowStock.length} stock line${lowStock.length !== 1 ? 's' : ''} below par (${lowStock.slice(0, 3).map((s: { item: string }) => s.item).join(', ')}${lowStock.length > 3 ? '…' : ''})` });
+    rags.filter((r) => r.rag === 'red').forEach((r) => alerts.push({ kind: 'COMPLIANCE', color: C.pink, route: '#/compliance', text: `${r.name} — ${r.items.filter((i) => i.state !== 'ok').map((i) => i.type).slice(0, 3).join(', ')}` }));
+    if (docsFlagged.length) alerts.push({ kind: 'DOCS', color: C.yellow, route: '#/compliance', text: `${docsFlagged.length} document${docsFlagged.length !== 1 ? 's' : ''} expired or expiring` });
+    if (timesheetsPending) alerts.push({ kind: 'PAYROLL', color: C.blue, route: '#/timesheets', text: `${timesheetsPending} timesheet${timesheetsPending !== 1 ? 's' : ''} awaiting approval` });
+
+    // confirmations for the next event
+    const nxt = upcoming[0] || null;
+    const confs = nxt ? data.assignmentsForEvent(nxt.id).map((a) => {
+      const st = data.get<Staff>('staff', a.staffId);
+      const un = data.get<Unit>('units', a.unitId);
+      return { a, st, un };
+    }) : [];
+
+    return {
+      events, upcoming, staff, units, rags, pnl, fin, lowStock, fleet, docs,
+      docsFlagged, shoppingOpen, logi, timesheetsPending, preps, crewGaps,
+      unconfirmed, alerts, nxt, confs,
+      live: events.filter((e) => eventStatus(e).kind === 'live').length,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, activeId, data.meta().updatedAt]);
+
+  const pins = useMemo(() => {
+    const all = (ready ? data.kvGet<Record<string, Pin[]>>('pins') : null) || {};
+    return all[activeId] || [];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, activeId, data.meta().updatedAt]);
+
+  async function addPin() {
+    if (!pinText.trim()) return;
+    const all = data.kvGet<Record<string, Pin[]>>('pins') || {};
+    const pin: Pin = { id: `p${Date.now().toString(36)}`, text: pinText.trim(), tone: PIN_TONES[pins.length % PIN_TONES.length] };
+    await data.kvSet('pins', { ...all, [activeId]: [...pins, pin] });
+    setPinText('');
+  }
+  async function removePin(id: string) {
+    const all = data.kvGet<Record<string, Pin[]>>('pins') || {};
+    await data.kvSet('pins', { ...all, [activeId]: pins.filter((p) => p.id !== id) });
+  }
 
   if (error) return <div className="p4"><div className="banner">Couldn't load data: {error}</div></div>;
   if (!ready) return <div className="state"><div><div className="spinner" /><div className="eyebrow">Loading command centre</div></div></div>;
+  if (!vendor || !v) return <div className="p4"><div className="empty-state">No operators yet. Add one from Client Accounts.</div></div>;
+
+  const money = [
+    { label: 'paid', value: v.pnl.paid, color: C.green },
+    { label: 'outstanding', value: v.pnl.outstanding, color: C.yellow },
+    { label: 'expenses', value: v.pnl.expenses, color: C.pink },
+  ];
+  const ragCounts = [
+    { label: 'clear', value: v.rags.filter((r) => r.rag === 'green').length, color: C.green },
+    { label: 'expiring', value: v.rags.filter((r) => r.rag === 'amber').length, color: C.yellow },
+    { label: 'blocked', value: v.rags.filter((r) => r.rag === 'red').length, color: C.pink },
+  ];
+  const maxCost = Math.max(1, ...v.fin.events.map((e) => e.crewCost));
+
+  const wall = [
+    { k: 'Events', n: v.events.length, c: C.cyan, href: '#/events' },
+    { k: 'Live now', n: v.live, c: v.live ? C.green : C.faint, href: '#/events' },
+    { k: 'Units', n: v.units.length, c: C.pink, href: `#/console/${activeId}` },
+    { k: 'Staff', n: v.staff.length, c: C.green, href: `#/console/${activeId}` },
+    { k: 'Crew gaps', n: v.crewGaps, c: v.crewGaps ? C.warn : C.faint, href: '#/callouts' },
+    { k: 'Unconfirmed', n: v.unconfirmed, c: v.unconfirmed ? C.accent2 : C.faint, href: '#/callouts' },
+    { k: 'Stock low', n: v.lowStock.length, c: v.lowStock.length ? C.yellow : C.faint, href: '#/stock' },
+    { k: 'Shopping', n: v.shoppingOpen, c: v.shoppingOpen ? C.blue : C.faint, href: '#/stock' },
+    { k: 'Fleet', n: v.fleet.length, c: C.blue, href: '#/logistics' },
+    { k: 'En route', n: v.logi.enRoute, c: v.logi.enRoute ? C.yellow : C.faint, href: '#/logistics' },
+    { k: 'Docs flagged', n: v.docsFlagged.length, c: v.docsFlagged.length ? C.pink : C.faint, href: '#/compliance' },
+    { k: 'Sheets to approve', n: v.timesheetsPending, c: v.timesheetsPending ? C.blue : C.faint, href: '#/timesheets' },
+  ];
 
   return (
-    <div data-screen-label="Command Centre" style={{ minHeight: '100vh', padding: '30px 28px 100px' }}>
-      <div style={{ maxWidth: 1080, margin: '0 auto' }}>
+    <div data-screen-label="Command Centre" style={{ minHeight: '100vh', padding: '26px 24px 100px' }}>
+      <div style={{ maxWidth: 1180, margin: '0 auto' }}>
 
-        {/* KPI strip */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 11, marginBottom: 26 }}>
-          {vals.kpis.map((k, i) => (
-            <div key={i} style={{ ...card, padding: '13px 15px' }}>
-              <div style={{ fontSize: 9.5, letterSpacing: '.08em', color: C.faint, fontFamily: MONO, textTransform: 'uppercase' }}>{k.label}</div>
-              <div style={{ fontSize: 23, fontWeight: 700, fontFamily: MONO, color: k.color, marginTop: 3 }}>{k.value}</div>
-              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{k.sub}</div>
-            </div>
+        {/* vendor bar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 18 }}>
+          <select className="client-select" value={activeId} onChange={(e) => setClientId(e.target.value)} aria-label="Vendor">
+            {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <span className="client-status" data-status={vendor.status}>{vendor.status}</span>
+          {vendor.contact && <span style={{ fontSize: 13, color: C.faint }}>{vendor.contact}{vendor.phone ? ` · ${vendor.phone}` : ''}</span>}
+          <span style={{ flex: 1 }} />
+          <span style={{ fontFamily: MONO, fontSize: 20, fontWeight: 700, color: v.pnl.net >= 0 ? C.green : C.pink, textShadow: `0 0 12px color-mix(in oklch, ${v.pnl.net >= 0 ? C.green : C.pink} 45%, transparent)` }}>
+            {gbp(v.pnl.net)} <span style={{ fontSize: 10, color: C.faint, fontWeight: 400 }}>NET</span>
+          </span>
+        </div>
+
+        {/* KPI wall */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(105px,1fr))', gap: 8, marginBottom: 18 }}>
+          {wall.map((w) => (
+            <a key={w.k} href={w.href} style={{ ...card, padding: '9px 12px', textDecoration: 'none', color: 'inherit' }}>
+              <div style={{ fontSize: 8.5, letterSpacing: '.08em', color: C.faint, fontFamily: MONO, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{w.k}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, fontFamily: MONO, color: w.c }}>{w.n}</div>
+            </a>
           ))}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: 18, alignItems: 'start' }}>
-          {/* LEFT */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
-            {/* alerts */}
-            <div style={card}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 13 }}>
-                <div style={secLabel(C.danger)}>NEEDS ACTION</div>
-                <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 600, color: C.danger, background: 'oklch(0.70 0.24 350/0.16)', borderRadius: 20, padding: '1px 8px' }}>{vals.alerts.length}</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {vals.alerts.map((a, i) => (
-                  <a key={i} href={a.route} onClick={(e) => { e.preventDefault(); go(a.route); }}
-                    style={{ display: 'flex', gap: 11, alignItems: 'center', background: C.panel2, border: `1px solid ${C.line}`, borderLeft: `3px solid ${a.color}`, borderRadius: 9, padding: '9px 13px', color: 'inherit' }}>
-                    <span style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 600, color: a.color, minWidth: 64, letterSpacing: '.04em' }}>{a.kind}</span>
-                    <span style={{ flex: 1, fontSize: 13, lineHeight: 1.45 }}>{a.text}</span>
-                    <span style={{ color: C.faint, fontSize: 12 }}>→</span>
-                  </a>
-                ))}
-                {vals.alerts.length === 0 && <div style={{ fontSize: 13, color: C.ok, padding: '6px 2px' }}>All clear — nothing needs action. ✓</div>}
-              </div>
-            </div>
+        {/* season timeline */}
+        <div style={{ ...card, marginBottom: 18, paddingBottom: 8 }}>
+          <div style={{ ...secLabel(C.cyan), marginBottom: 8 }}>Season timeline</div>
+          <EventTimeline data={data} clientId={activeId} onOpen={(id) => { window.location.hash = `#/event/${id}`; }} />
+        </div>
 
-            {/* events register */}
-            <div style={card}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 13 }}>
-                <div style={secLabel(C.accent2)}>EVENTS REGISTER — ALL OPERATORS</div>
-                <a href="#/events" onClick={(e) => { e.preventDefault(); go('#/events'); }} style={{ fontSize: 12, fontWeight: 600, color: C.accent }}>Full register →</a>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-                {vals.events.map((ev, i) => (
-                  <a key={i} href={ev.route} onClick={(e) => { e.preventDefault(); go(ev.route); }}
-                    style={{ display: 'block', background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 11, padding: '12px 15px', color: 'inherit' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
-                      <span style={{ fontSize: 14.5, fontWeight: 700 }}>{ev.name}</span>
-                      <span style={{ fontSize: 11, color: C.faint, fontFamily: MONO }}>{ev.client}</span>
-                      <span style={{ flex: 1 }} />
-                      <span style={{ fontFamily: MONO, fontSize: 11.5, fontWeight: 600, color: ev.dColor }}>{ev.countdown}</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11.5, color: C.muted }}>
-                      <span>{ev.when}</span>
-                      <span style={{ fontFamily: MONO, color: C.faint }}>{ev.units}</span>
-                      <span style={{ color: ev.crewColor, fontFamily: MONO }}>crew {ev.crew}</span>
-                      <span style={{ color: ev.confColor, fontFamily: MONO }}>{ev.conf}</span>
-                      <span style={{ color: ev.stockColor, fontFamily: MONO }}>{ev.stock}</span>
-                    </div>
-                  </a>
-                ))}
-                {vals.events.length === 0 && <div style={{ fontSize: 13, color: C.faint }}>Nothing booked ahead.</div>}
-              </div>
+        {/* graphs row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 14, marginBottom: 18 }}>
+          <Donut title="Money" total={gbp(v.pnl.invoiced)} totalSub="invoiced" segments={money} fmtVal={gbp} link="#/finance" />
+          <Donut title="Crew compliance" total={String(v.staff.length)} totalSub="crew" segments={ragCounts} fmtVal={(n) => String(n)} link="#/compliance" />
+          <div style={card}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span style={secLabel(C.accent2)}>Crew cost by event</span>
+              <a href="#/finance" style={{ fontSize: 11, color: C.accent }}>Finance →</a>
             </div>
+            {v.fin.events.length === 0 ? (
+              <div style={{ fontSize: 12, color: C.faint }}>No events yet.</div>
+            ) : v.fin.events.slice(0, 6).map((e) => (
+              <div key={e.eventId} style={{ marginBottom: 7 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: 10, marginBottom: 2 }}>
+                  <span style={{ color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>{e.eventName}</span>
+                  <span style={{ color: e.color, fontWeight: 700 }}>{gbp(e.crewCost)}</span>
+                </div>
+                <div style={{ height: 7, borderRadius: 4, background: C.bg, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${Math.round((e.crewCost / maxCost) * 100)}%`, background: e.color, boxShadow: `0 0 8px ${e.color}`, borderRadius: 4 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* readiness gauges + pinboard */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 14, marginBottom: 18, alignItems: 'start' }}>
+          <div style={card}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span style={secLabel(C.green)}>Readiness gauges</span>
+              <a href="#/readiness" style={{ fontSize: 11, color: C.accent }}>Prep panels →</a>
+            </div>
+            {v.preps.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: C.faint }}>No upcoming events.</div>
+            ) : v.preps.map(({ e, prep, color }) => (
+              <a key={e.id} href={`#/event/${e.id}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit', marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
+                  <span style={{ fontWeight: 600 }}><span style={{ color, marginRight: 6 }}>●</span>{e.name}</span>
+                  <span style={{ fontFamily: MONO, fontWeight: 700, color: prep.blocked ? C.danger : prep.score >= 80 ? C.green : prep.score >= 50 ? C.yellow : C.warn }}>
+                    {prep.blocked ? 'BLOCKED' : `${prep.score}%`}
+                  </span>
+                </div>
+                <div style={{ height: 8, borderRadius: 4, background: C.bg, overflow: 'hidden', display: 'flex' }}>
+                  {prep.sections.map((s) => (
+                    <div key={s.key} title={`${s.label} ${s.pct}%`} style={{
+                      width: `${(s.weight / 100) * 100}%`, height: '100%',
+                      background: `color-mix(in oklch, ${prep.blocked && s.key === 'compliance' ? C.danger : s.done ? C.green : s.pct >= 50 ? C.yellow : C.warn} ${Math.max(25, s.pct)}%, ${C.bg})`,
+                      borderRight: `1px solid ${C.bg}`,
+                    }} />
+                  ))}
+                </div>
+              </a>
+            ))}
           </div>
 
-          {/* RIGHT */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
-            {/* crew confirmations */}
-            <div style={card}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                <div style={secLabel(C.ok)}>CREW CONFIRMATIONS</div>
-                <span style={{ fontFamily: MONO, fontSize: 11.5, color: vals.confSummaryColor }}>{vals.confSummary}</span>
-              </div>
-              <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 12 }}>{vals.confEventName}</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {vals.confs.map((c) => (
-                  <div key={c.id} style={{ display: 'flex', gap: 10, alignItems: 'center', background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 9, padding: '8px 11px' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{c.name}</div>
-                      <div style={{ fontSize: 10.5, color: C.faint, fontFamily: MONO }}>{c.unit}</div>
-                    </div>
-                    {c.pending ? (
-                      <>
-                        <button onClick={c.chase} style={{ background: 'oklch(0.80 0.21 150/0.14)', border: `1px solid ${C.ok}`, color: C.ok, borderRadius: 7, padding: '5px 9px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>WhatsApp</button>
-                        <button onClick={c.confirm} style={{ background: 'transparent', border: `1px solid ${C.line}`, color: C.muted, borderRadius: 7, padding: '5px 9px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Mark ✓</button>
-                      </>
-                    ) : (
-                      <button onClick={c.unconfirm} style={{ background: 'transparent', border: 'none', color: C.ok, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: MONO }}>CONFIRMED ✓</button>
-                    )}
-                  </div>
-                ))}
-                {vals.confs.length === 0 && <div style={{ fontSize: 12.5, color: C.faint }}>No crew assigned to the next event yet — <a href="#/console" onClick={(e) => { e.preventDefault(); go('#/console'); }} style={{ color: C.accent }}>assign in the Console</a>.</div>}
-              </div>
+          {/* pinboard */}
+          <div style={card}>
+            <div style={{ ...secLabel(C.yellow), marginBottom: 10 }}>Pinboard</div>
+            {pins.length === 0 && <div style={{ fontSize: 12.5, color: C.faint, marginBottom: 8 }}>Pin anything you must not forget for {vendor.name} — it syncs to every device.</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+              {pins.map((p) => (
+                <div key={p.id} style={{ display: 'flex', gap: 9, alignItems: 'flex-start', background: C.panel2, border: `1px solid ${C.line}`, borderLeft: `3px solid ${p.tone}`, borderRadius: 8, padding: '8px 10px' }}>
+                  <span style={{ color: p.tone, fontSize: 11, marginTop: 1 }}>📌</span>
+                  <span style={{ flex: 1, fontSize: 12.5, lineHeight: 1.45 }}>{p.text}</span>
+                  <button onClick={() => removePin(p.id)} aria-label="Remove pin" style={{ background: 'none', border: 'none', color: C.faint, cursor: 'pointer', fontSize: 12 }}>✕</button>
+                </div>
+              ))}
             </div>
-
-            {/* modules */}
-            <div style={card}>
-              <div style={{ ...secLabel(C.accent), marginBottom: 12 }}>MODULES</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                {modules.map((m, i) => (
-                  <a key={i} href={m.route} onClick={(e) => { e.preventDefault(); go(m.route); }}
-                    style={{ background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '11px 13px', color: 'inherit', display: 'block' }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{m.label}</div>
-                    <div style={{ fontSize: 10.5, color: C.faint, marginTop: 2 }}>{m.sub}</div>
-                  </a>
-                ))}
-              </div>
+            <div className="row-inline">
+              <input className="inp" placeholder="Pin a note…" value={pinText}
+                onChange={(e) => setPinText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') addPin(); }} />
+              <button className="btn btn-primary btn-sm" onClick={addPin} disabled={!pinText.trim()}>Pin</button>
             </div>
           </div>
         </div>
 
-        {/* visual events table */}
-        <div style={{ ...card, marginTop: 18, overflowX: 'auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-            <div style={secLabel(C.accent)}>EVENTS SCHEDULE — ALL OPERATORS</div>
-            <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 600, color: C.accent, background: 'oklch(0.72 0.19 250/0.14)', borderRadius: 20, padding: '1px 8px' }}>{vals.table.length}</span>
-            <div style={{ flex: 1, height: 1, background: C.line }} />
-            <a href="#/events" onClick={(e) => { e.preventDefault(); go('#/events'); }} style={{ fontSize: 12, fontWeight: 600, color: C.accent }}>Full register →</a>
-          </div>
-          <div style={{ minWidth: 940 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1.7fr 1.15fr 1.1fr 1fr 1fr 0.9fr', gap: 14, padding: '0 14px 9px', fontFamily: MONO, fontSize: 9, letterSpacing: '.1em', color: C.faint }}>
-              <div>OPERATOR / EVENT</div><div>WHEN</div><div>UNITS</div><div>CREW</div><div>CONFIRMED</div><div>STATUS</div>
+        {/* alerts + confirmations */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 14, marginBottom: 18, alignItems: 'start' }}>
+          <div style={card}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 11 }}>
+              <span style={secLabel(C.danger)}>Needs action — {vendor.name}</span>
+              <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 600, color: v.alerts.length ? C.danger : C.green, background: 'color-mix(in oklch, currentColor 14%, transparent)', borderRadius: 20, padding: '1px 8px' }}>{v.alerts.length}</span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {vals.table.map((r, i) => (
-                <a key={i} href={r.route} onClick={(e) => { e.preventDefault(); go(r.route); }}
-                  style={{ display: 'grid', gridTemplateColumns: '1.7fr 1.15fr 1.1fr 1fr 1fr 0.9fr', gap: 14, alignItems: 'center', background: C.panel2, border: `1px solid ${C.line}`, borderLeft: `3px solid ${r.opColor}`, borderRadius: 12, padding: '12px 14px', color: 'inherit' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                    <div style={{ width: 32, height: 32, flex: 'none', borderRadius: 9, background: r.opColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MONO, fontSize: 11, fontWeight: 700, color: 'oklch(0.13 0.02 268)', boxShadow: `0 0 10px ${r.opColor}` }}>{r.opInitials}</div>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
-                      <div style={{ fontSize: 10.5, color: C.faint, fontFamily: MONO, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.op} · {r.loc}</div>
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ display: 'inline-block', fontFamily: MONO, fontSize: 11, fontWeight: 700, color: r.cdColor, border: `1px solid ${r.cdColor}`, borderRadius: 6, padding: '2px 8px', marginBottom: 4 }}>{r.countdown}</div>
-                    <div style={{ fontFamily: MONO, fontSize: 10.5, color: C.muted }}>{r.dates}</div>
-                    <div style={{ fontFamily: MONO, fontSize: 9.5, color: C.faint }}>{r.daysInfo}</div>
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {r.units.map((u: string, j: number) => <span key={j} style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 600, color: C.muted, border: `1px solid ${C.line}`, borderRadius: 5, padding: '2px 6px' }}>{u}</span>)}
-                    {r.noUnits && <span style={{ fontSize: 10.5, color: C.faint }}>no units</span>}
-                  </div>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: 10.5, marginBottom: 4 }}><span style={{ color: C.muted }}>crew</span><span style={{ color: r.crewColor, fontWeight: 600 }}>{r.crewLabel}</span></div>
-                    <div style={{ height: 6, borderRadius: 3, background: C.bg, overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 3, background: r.crewColor, boxShadow: `0 0 7px ${r.crewColor}`, width: r.crewPct }} /></div>
-                  </div>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: 10.5, marginBottom: 4 }}><span style={{ color: C.muted }}>conf</span><span style={{ color: r.confColor, fontWeight: 600 }}>{r.confLabel}</span></div>
-                    <div style={{ height: 6, borderRadius: 3, background: C.bg, overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 3, background: r.confColor, boxShadow: `0 0 7px ${r.confColor}`, width: r.confPct }} /></div>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-start' }}>
-                    <span style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 600, color: r.statusColor, border: `1px solid ${r.statusColor}`, borderRadius: 5, padding: '2px 8px' }}>{r.status}</span>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: MONO, fontSize: 10, color: r.stockColor }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: r.stockColor, boxShadow: `0 0 6px ${r.stockColor}` }} />{r.stock}</span>
-                  </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {v.alerts.map((a, i) => (
+                <a key={i} href={a.route} style={{ display: 'flex', gap: 10, alignItems: 'center', background: C.panel2, border: `1px solid ${C.line}`, borderLeft: `3px solid ${a.color}`, borderRadius: 8, padding: '8px 12px', color: 'inherit', textDecoration: 'none' }}>
+                  <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: a.color, minWidth: 74, letterSpacing: '.05em' }}>{a.kind}</span>
+                  <span style={{ flex: 1, fontSize: 12.5, lineHeight: 1.45 }}>{a.text}</span>
+                  <span style={{ color: C.faint, fontSize: 12 }}>→</span>
                 </a>
               ))}
-              {vals.table.length === 0 && <div style={{ fontSize: 13, color: C.faint, padding: '8px 2px' }}>No events on the system yet.</div>}
+              {v.alerts.length === 0 && <div style={{ fontSize: 12.5, color: C.green }}>All clear for this vendor. ✓</div>}
             </div>
+          </div>
+
+          <div style={card}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={secLabel(C.green)}>Crew confirmations</span>
+              {v.nxt && <span style={{ fontFamily: MONO, fontSize: 11, color: v.confs.length && v.confs.every((c) => c.a.confirmed) ? C.green : C.warn }}>
+                {v.confs.filter((c) => c.a.confirmed).length}/{v.confs.length}
+              </span>}
+            </div>
+            {!v.nxt ? (
+              <div style={{ fontSize: 12.5, color: C.faint }}>No upcoming event.</div>
+            ) : (
+              <>
+                <div style={{ fontSize: 11, color: C.faint, marginBottom: 10 }}>{v.nxt.name} · crew call {v.nxt.callTime || 'TBC'} · {fmt(v.nxt.start)}</div>
+                {v.confs.length === 0 && <div style={{ fontSize: 12.5, color: C.faint }}>No crew assigned yet — <a href={`#/console/${activeId}`} style={{ color: C.accent }}>staff it in the Console</a>.</div>}
+                {v.confs.map(({ a, st, un }) => (
+                  <div key={a.id} style={{ display: 'flex', gap: 9, alignItems: 'center', background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 8, padding: '7px 10px', marginBottom: 6 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 600 }}>{st?.name ?? '?'}</div>
+                      <div style={{ fontSize: 10, color: C.faint, fontFamily: MONO }}>{un?.code || ''}{a.area ? ` · ${a.area}` : ''}</div>
+                    </div>
+                    {a.confirmed ? (
+                      <button onClick={() => data.save('assignments', { id: a.id, confirmed: false })}
+                        style={{ background: 'transparent', border: 'none', color: C.green, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: MONO }}>✓ CONF</button>
+                    ) : (
+                      <>
+                        {st?.phone && (
+                          <button onClick={() => {
+                            const msg = `Hi ${(st.name || '').split(' ')[0]}, confirming your shift: ${v.nxt!.name} on ${v.nxt!.start || ''}, crew call ${v.nxt!.callTime || 'TBC'}, unit ${un?.code || ''}. Reply YES to confirm.`;
+                            window.open(`https://wa.me/${String(st.phone).replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+                          }} style={{ background: 'color-mix(in oklch, var(--neon-green) 14%, transparent)', border: `1px solid ${C.green}`, color: C.green, borderRadius: 7, padding: '4px 8px', fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit' }}>WhatsApp</button>
+                        )}
+                        <button onClick={() => data.save('assignments', { id: a.id, confirmed: true })}
+                          style={{ background: 'transparent', border: `1px solid ${C.line}`, color: C.muted, borderRadius: 7, padding: '4px 8px', fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit' }}>Mark ✓</button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ops mini-widgets */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(215px,1fr))', gap: 14, marginBottom: 18 }}>
+          <MiniList title="Fleet" color={C.blue} link="#/logistics" empty="No vehicles registered."
+            rows={v.fleet.slice(0, 4).map((f) => ({ a: f.name, b: `${f.vtype}${f.towCapable ? ' · tow' : ''}`, c: f.reg || '' }))} />
+          <MiniList title="Docs expiring" color={C.pink} link="#/compliance" empty="Nothing expiring. ✓"
+            rows={v.docsFlagged.slice(0, 4).map((x) => ({ a: x.title, b: x.docType, c: x.expiry ? fmt(x.expiry) : '' }))} />
+          <MiniList title="Low stock" color={C.yellow} link="#/stock" empty="Everything at par. ✓"
+            rows={v.lowStock.slice(0, 4).map((l: { item: string; unitCode: string; orderQty: number }) => ({ a: l.item, b: l.unitCode, c: `+${l.orderQty}` }))} />
+          <MiniList title="Units" color={C.pink} link={`#/console/${activeId}`} empty="No units yet."
+            rows={v.units.slice(0, 4).map((u) => {
+              const cl = u.checklist || [];
+              return { a: `${u.code} · ${u.name}`, b: u.type, c: cl.length ? `${cl.filter((c) => c.on).length}/${cl.length}` : '—', tone: unitColor(u.type) };
+            })} />
+        </div>
+
+        {/* schedule table */}
+        <div style={{ ...card, overflowX: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <span style={secLabel(C.accent)}>Schedule — {vendor.name}</span>
+            <div style={{ flex: 1, height: 1, background: C.line }} />
+            <a href="#/events" style={{ fontSize: 11.5, fontWeight: 600, color: C.accent }}>Full register →</a>
+          </div>
+          <div style={{ minWidth: 760 }}>
+            {v.events.map((e) => {
+              const st = eventStatus(e);
+              const color = data.eventColor(e.id);
+              const asg = data.assignmentsForEvent(e.id);
+              const target = Object.values(data.staffingFor(e)).reduce((n: number, x) => n + (x as number), 0);
+              const conf = asg.filter((a) => a.confirmed).length;
+              return (
+                <a key={e.id} href={`#/event/${e.id}`}
+                  style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1fr 1fr 0.7fr', gap: 12, alignItems: 'center', background: C.panel2, border: `1px solid ${C.line}`, borderLeft: `3px solid ${color}`, borderRadius: 10, padding: '10px 13px', color: 'inherit', textDecoration: 'none', marginBottom: 7, opacity: st.kind === 'past' ? 0.55 : 1 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</div>
+                    <div style={{ fontSize: 10, color: C.faint, fontFamily: MONO }}>{e.loc || '—'}</div>
+                  </div>
+                  <span style={{ fontFamily: MONO, fontSize: 10.5, color: C.muted }}>{fmt(e.start)}{e.end && e.end !== e.start ? ` – ${fmt(e.end)}` : ''}</span>
+                  <span style={{ fontFamily: MONO, fontSize: 10.5, color: asg.length >= target && target > 0 ? C.green : C.warn }}>crew {asg.length}/{target}</span>
+                  <span style={{ fontFamily: MONO, fontSize: 10.5, color: asg.length && conf === asg.length ? C.green : C.accent2 }}>conf {conf}/{asg.length}</span>
+                  <span className="status-pill" data-kind={st.kind} style={{ justifySelf: 'end' }}>{st.label}</span>
+                </a>
+              );
+            })}
+            {v.events.length === 0 && <div style={{ fontSize: 12.5, color: C.faint }}>No events for this vendor yet.</div>}
           </div>
         </div>
 
       </div>
+    </div>
+  );
+}
+
+/* Donut chart via conic-gradient — no chart library needed. */
+function Donut({ title, total, totalSub, segments, fmtVal, link }: {
+  title: string; total: string; totalSub: string;
+  segments: { label: string; value: number; color: string }[];
+  fmtVal: (n: number) => string; link: string;
+}) {
+  const sum = segments.reduce((n, s) => n + s.value, 0);
+  let acc = 0;
+  const stops = segments.map((s) => {
+    const from = sum ? (acc / sum) * 360 : 0;
+    acc += s.value;
+    const to = sum ? (acc / sum) * 360 : 0;
+    return `${s.color} ${from}deg ${to}deg`;
+  }).join(', ');
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+        <span style={secLabel(C.cyan)}>{title}</span>
+        <a href={link} style={{ fontSize: 11, color: C.accent }}>Open →</a>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ position: 'relative', width: 96, height: 96, flex: 'none' }}>
+          <div aria-hidden style={{
+            width: 96, height: 96, borderRadius: '50%',
+            background: sum ? `conic-gradient(${stops})` : C.bg,
+            mask: 'radial-gradient(circle, transparent 55%, black 56%)',
+            WebkitMask: 'radial-gradient(circle, transparent 55%, black 56%)',
+            filter: 'drop-shadow(0 0 8px color-mix(in oklch, var(--neon-cyan) 25%, transparent))',
+          }} />
+          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', pointerEvents: 'none' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700 }}>{total}</div>
+              <div style={{ fontSize: 8.5, color: C.faint, textTransform: 'uppercase', letterSpacing: '.06em' }}>{totalSub}</div>
+            </div>
+          </div>
+        </div>
+        <div style={{ flex: 1 }}>
+          {segments.map((s) => (
+            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5, padding: '2px 0' }}>
+              <span style={{ width: 9, height: 9, borderRadius: 3, background: s.color, boxShadow: `0 0 6px ${s.color}`, flex: 'none' }} />
+              <span style={{ color: C.muted, flex: 1 }}>{s.label}</span>
+              <span style={{ fontFamily: MONO, fontWeight: 700, color: s.color }}>{fmtVal(s.value)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Compact three-column list widget. */
+function MiniList({ title, color, link, empty, rows }: {
+  title: string; color: string; link: string; empty: string;
+  rows: { a: string; b: string; c: string; tone?: string }[];
+}) {
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 9 }}>
+        <span style={secLabel(color)}>{title}</span>
+        <a href={link} style={{ fontSize: 11, color: C.accent }}>→</a>
+      </div>
+      {rows.length === 0 ? (
+        <div style={{ fontSize: 12, color: C.faint }}>{empty}</div>
+      ) : rows.map((r, i) => (
+        <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 12, padding: '3px 0', borderBottom: `1px solid ${C.line}` }}>
+          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: r.tone || C.text }}>{r.a}</span>
+          <span style={{ fontFamily: MONO, fontSize: 9.5, color: C.faint }}>{r.b}</span>
+          <span style={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 700, color }}>{r.c}</span>
+        </div>
+      ))}
     </div>
   );
 }
