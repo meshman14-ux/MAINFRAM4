@@ -14,7 +14,8 @@ you have already run is safe.
 | 6 | `05_pipeline.sql` | `mf_pipeline` (sales CRM) | ✅ |
 | 7 | `06_logistics.sql` | `mf_movements` (vehicle/driver movements) | ✅ |
 | 8 | `07_tasks.sql` | `mf_event_tasks` (per-event tasks) | ✅ |
-| 9 | `08_system_upgrade.sql` | **NEW** — `mf_timesheets` (was missing its migration), `staff_no`, stock `category`, `mf_vehicles`, `mf_invoices`, `mf_expenses`, `mf_documents`, `mf_shopping_lists` (+ RLS + realtime for all) | ⬜ run this |
+| 9 | `08_system_upgrade.sql` | `mf_timesheets` (was missing its migration), `staff_no`, stock `category`, `mf_vehicles`, `mf_invoices`, `mf_expenses`, `mf_documents`, `mf_shopping_lists` (+ RLS + realtime for all) | ⬜ run this |
+| 10 | `09_audit_hardening.sql` | **NEW** — security fixes from the audit: `mf_kv` reads operator-only, remove crew `mf_staff` self-update, `mf_staff_client` name/role view for clients, timesheet-rate lock trigger | ⬜ run this |
 
 After running a migration, no app redeploy is needed — the running app picks
 the new tables up on next load.

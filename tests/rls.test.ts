@@ -50,6 +50,7 @@ beforeAll(async () => {
   await db.exec(sql('06_logistics.sql'));
   await db.exec(sql('07_tasks.sql'));
   await db.exec(sql('08_system_upgrade.sql'));
+  await db.exec(sql('09_audit_hardening.sql'));
   // A non-superuser role that does NOT bypass RLS (like Supabase 'authenticated').
   await db.exec(`
     create role authenticated nosuperuser nobypassrls;
@@ -252,5 +253,53 @@ describe('RLS: phase-12 commercial tables are operator-only', () => {
     await expect(
       asUser(CREW, `insert into mf_expenses(id, client_id, category, amount) values ('X999','C001','Fuel',1)`)
     ).rejects.toBeTruthy();
+  });
+});
+
+describe('RLS: audit hardening (Phase 13 / migration 09)', () => {
+  it('C1 — kv is operator-only read; crew and client cannot read it', async () => {
+    await asUser(OWNER, `insert into mf_kv(ns, data) values ('pins', '{"C001":[{"text":"secret"}]}'::jsonb)`);
+    expect(await asUser(OWNER, `select ns from mf_kv`)).toHaveLength(1);
+    expect(await asUser(CREW, `select ns from mf_kv`)).toHaveLength(0);
+    expect(await asUser(CLIENT, `select ns from mf_kv`)).toHaveLength(0);
+  });
+
+  it('C2 — crew can read their own staff row but cannot update it (no rate/RTW self-edit)', async () => {
+    // CREW is S006 @ C001. Reads own row:
+    const mine = await asUser(CREW, `select id from mf_staff where id = mf_staff_id()`);
+    expect(mine).toHaveLength(1);
+    // Set a known baseline as operator, then have crew attempt a self-edit.
+    await asUser(OWNER, `update mf_staff set rate = 12, rtw = 'Pending' where id = 'S006'`);
+    // With no crew UPDATE policy, RLS filters the row out — the update touches
+    // zero rows (no error), so the values are unchanged.
+    await asUser(CREW, `update mf_staff set rate = 999, rtw = 'Verified' where id = mf_staff_id()`);
+    const after = (await asUser(OWNER, `select rate, rtw from mf_staff where id = 'S006'`))[0];
+    expect(Number(after.rate)).toBe(12);
+    expect(after.rtw).toBe('Pending');
+  });
+
+  it('M6 — client cannot read the staff base table, but the name/role view hides phone + rate', async () => {
+    // base table: no rows for a client now
+    expect(await asUser(CLIENT, `select id from mf_staff`)).toHaveLength(0);
+    // the safe view returns their scope's crew, names/roles only (no phone/rate columns exist on it)
+    const rows = await asUser(CLIENT, `select id, name, role from mf_staff_client`);
+    expect(rows.every((r) => 'name' in r && 'role' in r && !('rate' in r) && !('phone' in r))).toBe(true);
+  });
+
+  it('M7 — a crew-submitted timesheet rate is forced to the staff record rate', async () => {
+    // give S006 a known rate as operator
+    await asUser(OWNER, `update mf_staff set rate = 11 where id = 'S006'`);
+    // crew assigned to an event so the insert passes the crew policy
+    await asUser(OWNER, `insert into mf_assignments(id,event_id,unit_id,staff_id,area) values ('A200','E002','U001','S006','Bar') on conflict (id) do nothing`);
+    // crew submits a padded rate of 500 — the trigger must overwrite it to 11
+    await asUser(CREW, `insert into mf_timesheets(id, event_id, staff_id, work_date, status, hours, rate) values ('TSX','E002','S006','2026-08-15','submitted', 8, 500)`);
+    const row = (await asUser(OWNER, `select rate from mf_timesheets where id = 'TSX'`))[0];
+    expect(Number(row.rate)).toBe(11);
+  });
+
+  it('M7 — an operator CAN set an explicit per-sheet rate', async () => {
+    await asUser(OWNER, `insert into mf_timesheets(id, event_id, staff_id, work_date, status, hours, rate) values ('TSY','E001','S001','2026-07-23','approved', 8, 25)`);
+    const row = (await asUser(OWNER, `select rate from mf_timesheets where id = 'TSY'`))[0];
+    expect(Number(row.rate)).toBe(25);
   });
 });
