@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import TopBar from './components/TopBar';
 import Home from './pages/Home';
 import CommandCentre from './pages/CommandCentre';
-import Overview from './pages/Overview';
 import OpsConsole from './pages/OpsConsole';
 import ClientAccounts from './pages/ClientAccounts';
 import ClientDiagnostic from './pages/ClientDiagnostic';
@@ -59,7 +58,8 @@ interface RouteDef { page: string; el: React.ReactNode; roles: ('owner'|'manager
 const ROUTES: Record<string, RouteDef> = {
   home:     { page: 'Home',      el: <Home />,          roles: ['owner', 'manager'] },
   command:  { page: 'Command',   el: <CommandCentre />, roles: ['owner', 'manager'] },
-  overview: { page: 'Overview',  el: <Overview />,      roles: ['owner', 'manager'] },
+  // 'overview' merged into Home — old #/overview links fall through the
+  // route guard to the role's home page automatically.
   console:  { page: 'Console',   el: <OpsConsole />,    roles: ['owner', 'manager'] },
   accounts: { page: 'Accounts',  el: <ClientAccounts />, roles: ['owner', 'manager'] },
   diagnostic: { page: 'Diagnostic', el: <ClientDiagnostic />, roles: ['owner', 'manager'] },

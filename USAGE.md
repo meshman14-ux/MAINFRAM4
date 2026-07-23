@@ -3,10 +3,13 @@
 Sign in and your role decides what you see: operators get the full system,
 crew land on Staff Hub, clients land on My Events.
 
-## Overview (`#/overview`)
-The whole business on one board — totals across every operator (events,
-live now, upcoming, units, staff, low stock, blocked crew) and one widget
-per operator with alert chips and per-event **Open →** buttons.
+## Home (`#/`)
+The homepage dashboard. Top half: a plain-English greeting ("3 things need
+your attention"), deep-linked status tiles, the next event with its
+staffing bar, and today's top actions. Bottom half: one management board
+per operator — their events with status pills and **Open →** buttons,
+units/staff counts, and alert chips (low stock, blocked crew, en route).
+The old Overview tab is merged in here.
 
 ## Console (`#/console`)
 The per-operator workbench. The event timeline strip at the top shows the

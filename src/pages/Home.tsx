@@ -1,10 +1,15 @@
-/* Home — the calm page. One glance answers "is everything OK, and what
-   needs me today?" in plain English: big status tiles (each one a link
-   to the fix), the next event, and the top three actions. Everything
-   dense — graphs, pins, per-vendor detail — lives in Command Centre. */
+/* Home — the homepage dashboard (Home + the old Overview, merged).
+   Top half is the calm summary: plain-English greeting, deep-linked
+   status tiles, next event, top actions. Bottom half is the
+   management layer: one board per operator with their stats, alert
+   chips and per-event Open buttons. Deep per-vendor analysis (graphs,
+   pins) stays in Command Centre. */
 import { useMemo } from 'react';
 import { useOpsData } from '../data/useOpsData';
+import type { Client } from '../data/types';
 import { homeKpis, needsAction, eventRows } from '../data/home';
+import { eventStatus } from '../components/console/eventStatus';
+import { complianceSummary, reorderForClient } from '../data/phase6';
 
 const fmtDate = (iso?: string) =>
   iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
@@ -14,7 +19,22 @@ export default function Home() {
 
   const view = useMemo(() => {
     if (!ready) return null;
-    return { kpis: homeKpis(data), actions: needsAction(data), rows: eventRows(data) };
+    // per-operator management boards (from the old Overview tab)
+    const boards = data.all<Client>('clients').map((client) => {
+      const events = data.eventsForClient(client.id)
+        .sort((a, b) => (a.start || '').localeCompare(b.start || ''))
+        .map((e) => ({ e, st: eventStatus(e), color: data.eventColor(e.id) }));
+      return {
+        client,
+        events,
+        units: data.unitsForClient(client.id).length,
+        staff: data.staffForClient(client.id).length,
+        lowStock: reorderForClient(data, client.id).length,
+        comp: complianceSummary(data, client.id),
+        logi: data.logisticsSummary(client.id),
+      };
+    });
+    return { kpis: homeKpis(data), actions: needsAction(data), rows: eventRows(data), boards };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, data, data.meta().updatedAt]);
 
@@ -35,7 +55,7 @@ export default function Home() {
     );
   }
 
-  const { kpis, actions, rows } = view;
+  const { kpis, actions, rows, boards } = view;
   const isFirstRun = data.all('clients').length === 0;
 
   if (isFirstRun) {
@@ -145,6 +165,48 @@ export default function Home() {
             <a className="btn btn-sm" href="#/timesheets" style={{ textDecoration: 'none' }}>Timesheets</a>
           </div>
         </section>
+      </div>
+
+      {/* per-operator management boards (merged in from the old Overview) */}
+      <div className="toolbar" style={{ marginTop: 28 }}>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 18 }}>Operators</h2>
+        <span className="muted" style={{ fontSize: 12.5 }}>every operator, every event — one board</span>
+      </div>
+      <div className="ov-grid">
+        {boards.map(({ client, events, units, staff, lowStock, comp, logi }) => (
+          <div className="unit-card" key={client.id} style={{ ['--uc' as string]: 'var(--neon-cyan)' }}>
+            <div className="ev-head">
+              <span className="unit-name" style={{ marginTop: 0 }}>{client.name}</span>
+              <span className="client-status" data-status={client.status}>{client.status}</span>
+              <a className="btn btn-primary btn-sm" href={`#/console/${client.id}`} style={{ marginLeft: 'auto', textDecoration: 'none' }}>Console</a>
+            </div>
+            <div className="ev-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+              <div className="ev-field"><div className="ev-label">Events</div><div className="fv mono">{events.length}</div></div>
+              <div className="ev-field"><div className="ev-label">Units</div><div className="fv mono">{units}</div></div>
+              <div className="ev-field"><div className="ev-label">Staff</div><div className="fv mono">{staff}</div></div>
+            </div>
+            {(lowStock > 0 || comp.blocked > 0 || logi.enRoute > 0) && (
+              <div className="row-inline" style={{ marginTop: 10, flexWrap: 'wrap' }}>
+                {lowStock > 0 && <span className="chip chip-amber">{lowStock} stock line{lowStock !== 1 ? 's' : ''} low</span>}
+                {comp.blocked > 0 && <span className="chip chip-red">{comp.blocked} crew blocked</span>}
+                {logi.enRoute > 0 && <span className="chip chip-blue">{logi.enRoute} en route</span>}
+              </div>
+            )}
+            {events.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                {events.map(({ e, st, color }) => (
+                  <div className="ov-ev" key={e.id} style={{ ['--evc' as string]: color }}>
+                    <span className="ev-swatch" style={{ color }} />
+                    <span className="ov-ev-name">{e.name}</span>
+                    <span className="mono ov-ev-date">{fmtDate(e.start)}</span>
+                    <span className="status-pill" data-kind={st.kind}>{st.label}</span>
+                    <a className="btn btn-ghost btn-sm" href={`#/event/${e.id}`} style={{ textDecoration: 'none' }}>Open →</a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
