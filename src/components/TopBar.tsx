@@ -14,6 +14,7 @@ const PRIMARY: { label: string; route: string; roles: Role[] }[] = [
   { label: 'Callouts',  route: '#/callouts',  roles: ['owner', 'manager'] },
   { label: 'Events',    route: '#/events',    roles: ['owner', 'manager', 'client'] },
   { label: 'Calendar',  route: '#/calendar',  roles: ['owner', 'manager', 'client'] },
+  { label: 'Timeline',  route: '#/timeline',  roles: ['owner', 'manager'] },
   { label: 'Staff Hub', route: '#/staff',     roles: ['owner', 'manager', 'crew'] },
 ];
 const MORE: { label: string; route: string; roles: Role[] }[] = [
