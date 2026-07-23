@@ -253,7 +253,21 @@
 }
 .ud-label { flex: 1; font-size: 13.5px; }
 
+/* ============================================================
+   Overview — whole-system dashboard (one widget per operator)
+   ============================================================ */
+.ov-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
+.ov-ev {
+  display: flex; align-items: center; gap: 9px; padding: 7px 10px;
+  border-radius: var(--r-sm); background: var(--inset);
+  border: 1px solid color-mix(in oklch, var(--evc, var(--panel-line)) 25%, var(--panel-line));
+}
+.ov-ev + .ov-ev { margin-top: 6px; }
+.ov-ev-name { flex: 1; font-size: 13px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-ev-date { font-size: 11px; color: var(--ink-3); }
+
 @media (max-width: 720px) {
   .ud-grid { grid-template-columns: 1fr; }
   .tl-item:not(:first-child)::before { display: none; }
+  .ov-grid { grid-template-columns: 1fr; }
 }

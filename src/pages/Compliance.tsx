@@ -3,6 +3,13 @@ import { useOpsData } from '../data/useOpsData';
 import type { Client } from '../data/types';
 import { complianceRegister, complianceSummary } from '../data/phase6';
 
+/* Status hue per compliance state — drives each card's glow. */
+const STATUS_COLOR: Record<string, string> = {
+  compliant: 'var(--neon-green)',
+  expiring: 'var(--neon-yellow)',
+  blocked: 'var(--neon-pink)',
+};
+
 export default function Compliance() {
   const { data, ready, error } = useOpsData();
   const [clientId, setClientId] = useState('');
@@ -39,11 +46,11 @@ export default function Compliance() {
       </div>
 
       {summary && (
-        <div className="stat-strip">
-          <div className="stat-box"><div className="v">{summary.total}</div><div className="k">Crew</div></div>
-          <div className="stat-box" data-tone="green"><div className="v">{summary.compliant}</div><div className="k">Compliant</div></div>
-          <div className="stat-box" data-tone="amber"><div className="v">{summary.expiring}</div><div className="k">Expiring</div></div>
-          <div className="stat-box" data-tone="red"><div className="v">{summary.blocked}</div><div className="k">Blocked</div></div>
+        <div className="kpi-row">
+          <div className="kpi-chip"><div className="k">Crew</div><div className="v" style={{ color: 'var(--ink)' }}>{summary.total}</div></div>
+          <div className="kpi-chip"><div className="k">Compliant</div><div className="v" style={{ color: 'var(--neon-green)' }}>{summary.compliant}</div></div>
+          <div className="kpi-chip"><div className="k">Expiring</div><div className="v" style={{ color: summary.expiring ? 'var(--neon-yellow)' : 'var(--ink-3)' }}>{summary.expiring}</div></div>
+          <div className="kpi-chip"><div className="k">Blocked</div><div className="v" style={{ color: summary.blocked ? 'var(--neon-pink)' : 'var(--ink-3)' }}>{summary.blocked}</div></div>
         </div>
       )}
 
@@ -61,26 +68,30 @@ export default function Compliance() {
       {rows.length === 0 ? (
         <div className="empty-state">No crew for this operator.</div>
       ) : (
-        rows.map((r) => {
-          const chip = r.status === 'compliant' ? 'chip-green' : r.status === 'expiring' ? 'chip-amber' : 'chip-red';
-          return (
-            <div className="comp-row" key={r.staffId}>
-              <div>
-                <div className="comp-name">{r.name}</div>
-                <div className="comp-role">{r.role}</div>
+        <div className="unit-grid">
+          {rows.map((r) => {
+            const col = STATUS_COLOR[r.status] || 'var(--neon-blue)';
+            const chip = r.status === 'compliant' ? 'chip-green' : r.status === 'expiring' ? 'chip-amber' : 'chip-red';
+            return (
+              <div className="unit-card" key={r.staffId} style={{ ['--uc' as string]: col }}>
+                <div className="ev-head">
+                  <span className="ev-swatch" style={{ color: col }} />
+                  <span className="unit-name" style={{ marginTop: 0, fontSize: 15 }}>{r.name}</span>
+                  <span className={`chip ${chip}`} style={{ marginLeft: 'auto' }}>{r.status}</span>
+                </div>
+                <div className="unit-desc">{r.role}</div>
+                <div style={{ marginTop: 10 }}>
+                  <span className={`chip ${r.rtw === 'Verified' ? 'chip-green' : 'chip-amber'}`}>RTW {r.rtw || 'Pending'}</span>
+                </div>
+                <div className="comp-issues" style={{ marginTop: 10, fontSize: 12.5 }}>
+                  {r.issues.length === 0 && r.expiringSoon.length === 0 && <span className="muted">All clear</span>}
+                  {r.issues.map((iss, i) => <span key={i} className="bad">{iss}{i < r.issues.length - 1 ? ' · ' : ''}</span>)}
+                  {r.expiringSoon.map((c, i) => <span key={`e${i}`} className="warn">{r.issues.length ? ' · ' : ''}{c.type} expiring</span>)}
+                </div>
               </div>
-              <div>
-                <span className={`chip ${r.rtw === 'Verified' ? 'chip-green' : 'chip-amber'}`}>RTW {r.rtw || 'Pending'}</span>
-              </div>
-              <div className="comp-issues">
-                {r.issues.length === 0 && r.expiringSoon.length === 0 && <span className="muted">All clear</span>}
-                {r.issues.map((iss, i) => <span key={i} className="bad">{iss}{i < r.issues.length - 1 ? ' · ' : ''}</span>)}
-                {r.expiringSoon.map((c, i) => <span key={`e${i}`} className="warn">{r.issues.length ? ' · ' : ''}{c.type} expiring</span>)}
-              </div>
-              <span className={`chip ${chip}`}>{r.status}</span>
-            </div>
-          );
-        })
+            );
+          })}
+        </div>
       )}
     </div>
   );

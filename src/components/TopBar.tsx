@@ -6,6 +6,7 @@ type Role = 'owner' | 'manager' | 'crew' | 'client';
 const PRIMARY: { label: string; route: string; roles: Role[] }[] = [
   { label: 'Home',      route: '#/',          roles: ['owner', 'manager'] },
   { label: 'My Events', route: '#/portal',    roles: ['client'] },
+  { label: 'Overview',  route: '#/overview',  roles: ['owner', 'manager'] },
   { label: 'Console',   route: '#/console',   roles: ['owner', 'manager'] },
   { label: 'Accounts',  route: '#/accounts',  roles: ['owner', 'manager'] },
   { label: 'Pipeline',  route: '#/pipeline',  roles: ['owner', 'manager'] },

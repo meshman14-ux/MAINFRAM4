@@ -28,6 +28,20 @@
 .comp-issues .bad { color: var(--red); }
 .comp-issues .warn { color: var(--amber); }
 
+/* reorder lines inside a unit widget (Stock page) */
+.stock-line {
+  display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center;
+  padding: 7px 10px; border-radius: var(--r-sm);
+  background: var(--inset); border: 1px solid var(--panel-line);
+}
+.stock-line + .stock-line { margin-top: 6px; }
+.stock-item { font-size: 13px; }
+.stock-onhand { font-size: 11.5px; color: var(--ink-3); }
+.stock-order {
+  font-size: 12px; font-weight: 600; color: var(--uc, var(--neon-yellow));
+  text-shadow: 0 0 8px color-mix(in oklch, var(--uc, var(--neon-yellow)) 45%, transparent);
+}
+
 /* finance table */
 .fin-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .fin-table th { text-align: left; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); padding: 8px 12px; font-weight: 500; background: var(--surface-2); border-bottom: 1px solid color-mix(in oklch, var(--neon-cyan) 55%, transparent); }

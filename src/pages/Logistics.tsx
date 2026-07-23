@@ -4,7 +4,7 @@ import type { Client, EventRec, Unit, Staff, Movement, MovementStatus } from '..
 
 const fmt = (iso?: string) => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
 const STATUS_COLOR: Record<MovementStatus, string> = {
-  planned: 'var(--ink-3)', 'en-route': 'var(--amber)', 'on-site': 'var(--green)', returned: 'var(--blue)',
+  planned: 'var(--ink-3)', 'en-route': 'var(--neon-yellow)', 'on-site': 'var(--neon-green)', returned: 'var(--neon-blue)',
 };
 const STATUS_LABEL: Record<MovementStatus, string> = {
   planned: 'PLANNED', 'en-route': 'EN ROUTE', 'on-site': 'ON SITE', returned: 'RETURNED',
@@ -95,7 +95,7 @@ function LogisticsEvent({ data, event, clientId, today }: {
   }
 
   return (
-    <div className="logi-event">
+    <div className="logi-event" style={{ ['--uc' as string]: data.eventColor(event.id) }}>
       <div className="logi-head">
         <span className="logi-name">{event.name}</span>
         <span className="logi-badge" data-tone={live ? 'live' : undefined}>{countdown}</span>
