@@ -62,3 +62,19 @@
 }
 .ready-badge[data-ready="true"] { color: var(--neon-green); }
 .ready-badge[data-ready="false"] { color: var(--neon-yellow); }
+
+/* prep panel — expandable weighted sections */
+.prep-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; margin-top: 12px; }
+.prep-sec { border-radius: var(--r-sm); background: var(--inset); border: 1px solid var(--panel-line); }
+.prep-sec[data-done="true"] { border-color: color-mix(in oklch, var(--neon-green) 40%, var(--panel-line)); }
+.prep-row {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  font: inherit; font-size: 13.5px; color: var(--ink); cursor: pointer;
+  background: none; border: none; padding: 9px 11px; text-align: left;
+}
+.prep-row .tick { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; flex-shrink: 0; background: var(--panel-line); color: var(--ink-3); }
+.prep-sec[data-done="true"] .prep-row .tick { background: color-mix(in oklab, var(--green) 25%, var(--panel)); color: var(--green); }
+.prep-label { flex: 1; }
+.prep-pct { font-size: 12px; font-weight: 600; }
+.prep-detail { padding: 0 12px 11px 37px; }
+.prep-item { font-size: 12.5px; color: var(--ink-2); padding: 2px 0; }

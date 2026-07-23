@@ -119,6 +119,135 @@ export function autoShortlist(d: OpsData, e: EventRec, unitId: string, limit = 5
     .slice(0, limit);
 }
 
+/* ---------------- readiness prep panel (module 3) ---------------- */
+
+export interface PrepSection {
+  key: 'crew' | 'units' | 'stock' | 'compliance' | 'logistics' | 'documents';
+  label: string;
+  pct: number;               // 0–100
+  done: boolean;
+  items: string[];           // exact outstanding items
+  link: string;              // deep-link to fix
+  weight: number;
+}
+
+export interface PrepPanel {
+  sections: PrepSection[];
+  score: number;             // weighted 0–100
+  blocked: boolean;          // hard gate: required compliance missing
+  blockers: string[];
+  ready: boolean;            // score 100 AND not blocked
+}
+
+/** Crew and compliance weigh more than stock — a fully stocked bar with no
+    licensed staff is not "ready". */
+const WEIGHTS: Record<PrepSection['key'], number> = {
+  crew: 25, compliance: 30, units: 15, stock: 10, logistics: 10, documents: 10,
+};
+
+export function prepPanel(d: OpsData, e: EventRec): PrepPanel {
+  const units = d.unitsForEvent(e);
+  const assigns = d.assignmentsForEvent(e.id);
+  const target = Object.values(d.staffingFor(e)).reduce((n: number, v) => n + (v as number), 0);
+  const confirmed = assigns.filter((a) => a.confirmed).length;
+  const clientId = e.clientId;
+
+  // crew — half the credit for booking to target, half for confirmations
+  const bookPct = target ? Math.min(1, assigns.length / target) : 0;
+  const confPct = assigns.length ? confirmed / assigns.length : 0;
+  const crewItems: string[] = [];
+  if (assigns.length < target) crewItems.push(`${target - assigns.length} of ${target} unfilled`);
+  if (confirmed < assigns.length) crewItems.push(`${assigns.length - confirmed} awaiting confirmation`);
+  if (!target) crewItems.push('No staffing target set');
+  const crew: PrepSection = {
+    key: 'crew', label: 'Crew', weight: WEIGHTS.crew,
+    pct: Math.round((bookPct * 0.5 + confPct * 0.5) * 100),
+    done: target > 0 && assigns.length >= target && confirmed === assigns.length,
+    items: crewItems, link: '#/callouts',
+  };
+
+  // units — on site with checklists progressing
+  const unitTotals = units.map((u) => {
+    const cl = u.checklist || [];
+    return { u, total: cl.length, done: cl.filter((c) => c.on).length };
+  });
+  const totChecks = unitTotals.reduce((n, x) => n + x.total, 0);
+  const doneChecks = unitTotals.reduce((n, x) => n + x.done, 0);
+  const unitsSec: PrepSection = {
+    key: 'units', label: 'Units', weight: WEIGHTS.units,
+    pct: units.length === 0 ? 0 : totChecks === 0 ? 60 : Math.round((doneChecks / totChecks) * 100),
+    done: units.length > 0 && totChecks > 0 && doneChecks === totChecks,
+    items: units.length === 0
+      ? ['No units allocated']
+      : unitTotals.filter((x) => x.done < x.total).map((x) => `${x.u.code}: ${x.total - x.done} checks open`),
+    link: `#/console/${clientId}`,
+  };
+
+  // stock — event units above par
+  const unitIds = new Set(units.map((u) => u.id));
+  const lines = d.all<{ unitId: string; qty: number; par: number }>('stock').filter((s) => unitIds.has(s.unitId));
+  const low = lines.filter((s) => Number(s.qty) < Number(s.par));
+  const stock: PrepSection = {
+    key: 'stock', label: 'Stock', weight: WEIGHTS.stock,
+    pct: lines.length ? Math.round(((lines.length - low.length) / lines.length) * 100) : 0,
+    done: lines.length > 0 && low.length === 0,
+    items: low.length ? [`${low.length} line${low.length !== 1 ? 's' : ''} below par`] : lines.length ? [] : ['No stock lines yet'],
+    link: '#/stock',
+  };
+
+  // compliance — the hard gate: required unit checks + assigned crew RAG
+  const unitComp = units.map(unitCompliance);
+  const requiredOpen = unitComp.reduce((n, u) => n + u.requiredOpen, 0);
+  const assignedStaff = [...new Set(assigns.map((a) => a.staffId))]
+    .map((id) => d.get<Staff>('staff', id)).filter(Boolean) as Staff[];
+  const crewRags = assignedStaff.map((s) => personalRag(d, s));
+  const redCrew = crewRags.filter((r) => r.rag === 'red');
+  const blockers = [
+    ...unitComp.flatMap((u) => u.open.filter((c) => c.required).map((c) => `${u.unit.code}: ${c.item}`)),
+    ...redCrew.map((r) => `${r.name}: ${r.items.filter((i) => i.state === 'missing' || i.state === 'expired').map((i) => i.type).join(', ')}`),
+  ];
+  const compProblems = requiredOpen + redCrew.length + crewRags.filter((r) => r.rag === 'amber').length;
+  const compDenom = unitComp.reduce((n, u) => n + u.total, 0) + crewRags.length || 1;
+  const compliance: PrepSection = {
+    key: 'compliance', label: 'Compliance', weight: WEIGHTS.compliance,
+    pct: Math.max(0, Math.round((1 - compProblems / compDenom) * 100)),
+    done: compProblems === 0 && assigns.length > 0,
+    items: blockers.length ? blockers : compProblems ? ['Expiring items to renew'] : [],
+    link: '#/compliance',
+  };
+
+  // logistics — movements planned for the event
+  const movements = d.movementsForEvent(e.id);
+  const logistics: PrepSection = {
+    key: 'logistics', label: 'Logistics', weight: WEIGHTS.logistics,
+    pct: units.length === 0 ? 0 : Math.min(100, Math.round((movements.length / Math.max(1, units.length)) * 100)),
+    done: movements.length >= Math.max(1, units.length),
+    items: movements.length === 0 ? ['No movements planned'] : [],
+    link: '#/logistics',
+  };
+
+  // documents — RAMS/docs flagged ready on the event, no expired docs in the hub
+  const docs = d.all<{ clientId: string; expiry?: string }>('documents').filter((x) => x.clientId === clientId);
+  const expired = docs.filter((x) => x.expiry && x.expiry < new Date().toISOString().slice(0, 10));
+  const docsReady = !!(e.eventOnboarding && e.eventOnboarding.docs);
+  const documents: PrepSection = {
+    key: 'documents', label: 'Documents', weight: WEIGHTS.documents,
+    pct: (docsReady ? 60 : 0) + (docs.length && expired.length === 0 ? 40 : 0),
+    done: docsReady && expired.length === 0,
+    items: [
+      ...(docsReady ? [] : ['RAMS / docs not marked ready']),
+      ...(expired.length ? [`${expired.length} document${expired.length !== 1 ? 's' : ''} expired`] : []),
+    ],
+    link: '#/compliance',
+  };
+
+  const sections = [crew, unitsSec, stock, compliance, logistics, documents];
+  const totalW = sections.reduce((n, s) => n + s.weight, 0);
+  const score = Math.round(sections.reduce((n, s) => n + s.pct * s.weight, 0) / totalW);
+  const blocked = blockers.length > 0;
+  return { sections, score, blocked, blockers, ready: !blocked && sections.every((s) => s.done) };
+}
+
 /** Both levels rolled up for the Information Hub header. */
 export function complianceRollup(d: OpsData, clientId: string): {
   unitOpen: number; unitRequiredOpen: number; crewProblems: number; crewRed: number;

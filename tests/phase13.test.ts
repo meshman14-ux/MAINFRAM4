@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { OpsData } from '../src/data/opsData';
 import type { OpsState, Staff, Unit } from '../src/data/types';
-import { personalRag, unitCompliance, complianceRollup, calloutRequests, calloutFill } from '../src/data/phase13';
+import { personalRag, unitCompliance, complianceRollup, calloutRequests, calloutFill, prepPanel } from '../src/data/phase13';
 import type { EventRec } from '../src/data/types';
 
 const future = (days: number) => {
@@ -123,6 +123,29 @@ describe('callouts by skill', () => {
     const fill = calloutFill(d, d.get<EventRec>('events', 'E002')!);
     expect(fill.filled).toBe(0);   // E002 has no assignments
     expect(fill.needed).toBe(3);
+  });
+});
+
+describe('prepPanel (readiness with hard gate)', () => {
+  const d = store();
+  const panel = prepPanel(d, d.get<EventRec>('events', 'E001')!);
+  it('hard-gates on a required unit compliance item', () => {
+    expect(panel.blocked).toBe(true);
+    expect(panel.ready).toBe(false);
+    expect(panel.blockers.some((b) => b.includes('Fire extinguisher'))).toBe(true);
+  });
+  it('has six weighted sections with compliance heaviest', () => {
+    expect(panel.sections.map((s) => s.key)).toEqual(['crew', 'units', 'stock', 'compliance', 'logistics', 'documents']);
+    const w = Object.fromEntries(panel.sections.map((s) => [s.key, s.weight]));
+    expect(w.compliance).toBeGreaterThan(w.stock);
+    expect(w.crew).toBeGreaterThan(w.stock);
+  });
+  it('scores 0–100 and lists exact outstanding items with fix links', () => {
+    expect(panel.score).toBeGreaterThanOrEqual(0);
+    expect(panel.score).toBeLessThanOrEqual(100);
+    const crew = panel.sections.find((s) => s.key === 'crew')!;
+    expect(crew.items.join(' ')).toContain('unfilled');
+    expect(crew.link).toBe('#/callouts');
   });
 });
 
