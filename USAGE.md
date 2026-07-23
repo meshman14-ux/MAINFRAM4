@@ -29,8 +29,19 @@ tasks, movements and the day-by-day schedule. Every timeline bar, register
 row and overview button lands here.
 
 ## Events (`#/events`) & Calendar
-The register (filter All/Upcoming/Live/Past) and the month calendar.
-Rows open the event dashboard.
+The register: each event is a card with a pulsing ● LIVE pill (or T-minus /
+DONE), a staffing bar, unit dots coloured by type, and quick actions (Open
+data pack · Callout crew · Edit). Past events collapse into a slim archive.
+The Calendar's month grid opens a **day itinerary** when you click a day —
+crew calls, journey departures, schedule phases and staffing across every
+event that day, in time order. Crew automatically see their personal
+version (their shifts and journeys only).
+
+## Readiness (`#/readiness`)
+Each event gets a weighted prep panel — Crew and Compliance weigh most —
+with six expandable sections showing the exact outstanding items and a
+"Fix in…" deep-link. **Hard gate:** an event can never show READY while a
+required compliance item (unit or personal) is missing.
 
 ## Stock (`#/stock`)
 The consolidated reorder list (below-par lines grouped per unit, CSV
@@ -39,10 +50,12 @@ or pull suggested stock for that unit type, tick items off as bought, then
 **Move ticked → stock** to turn them into real stock lines.
 
 ## Compliance (`#/compliance`)
-Crew compliance cards (RTW, certificates, double-booking warnings), the
-**Information Hub** — every insurance/licence/hygiene/RAMS document with
-expiry flags (red = expired, yellow = within 30 days) — and per-unit-type
-required-compliance lists.
+Two levels. **Unit (operational):** each unit's Safety + Documentation
+checks with hover descriptions and how-to-comply notes; required items
+glow red while open. **Crew (personal):** RAG cards per person — expand to
+the exact items and clear a missing/expiring certificate by attaching its
+renewal date inline. Both levels, plus document expiries, roll up into the
+**Information Hub** header.
 
 ## Finance (`#/finance`)
 Real P&L: invoices with line items (draft → sent → paid, overdue flagged
@@ -73,5 +86,8 @@ finish, then submit the sheet. Your operator approves it (the database
 blocks self-approval), and approved hours flow into payroll.
 
 ## Callouts & Open Jobs
-Broadcast a staffing callout per event; crew apply from Staff Hub; approve
-to convert applications into assignments.
+Callouts request staff **per unit, by skill, with counts** (defaulting
+from staffing gaps — adjust the numbers inline). Each request shows a live
+fill bar and an auto-shortlist of the best suitable crew. Crew accept from
+their Staff Hub; you approve each acceptance on the Callouts page — never
+first-come-first-served.

@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import type { OpsData } from '../../data/opsData';
 import type { Staff } from '../../data/types';
 import { sortStaff, type StaffSort } from '../../data/phase12';
+import { personalRag } from '../../data/phase13';
+import { unitColor } from './unitTheme';
 
 interface Props { data: OpsData; clientId: string; }
 const ROLES = ['Unit Manager', 'Bartender', 'Barista', 'Chef', 'Kitchen Assistant', 'Driver', 'General'];
@@ -10,7 +12,10 @@ const SORTS: { key: StaffSort; label: string }[] = [
   { key: 'name', label: 'Name' },
   { key: 'skill', label: 'Skill' },
 ];
+const RAG_CHIP: Record<string, string> = { green: 'chip-green', amber: 'chip-amber', red: 'chip-red' };
 
+/* The operational roster — one widget per crew member; clicking a card
+   opens their full Staff Hub profile (sketch notes §8). */
 export function StaffTab({ data, clientId }: Props) {
   const [sortBy, setSortBy] = useState<StaffSort>('staffNo');
   const staff = useMemo(
@@ -23,9 +28,6 @@ export function StaffTab({ data, clientId }: Props) {
   async function save(s: Partial<Staff>) { await data.save('staff', s); setEditing(null); }
   async function del(id: string) {
     if (confirm('Delete this staff member and their assignments?')) await data.remove('staff', id);
-  }
-  async function toggleRtw(s: Staff) {
-    await data.save('staff', { id: s.id, rtw: s.rtw === 'Verified' ? 'Pending' : 'Verified' });
   }
 
   return (
@@ -45,39 +47,44 @@ export function StaffTab({ data, clientId }: Props) {
       {staff.length === 0 ? (
         <div className="empty-state">No crew yet. Add your first staff member.</div>
       ) : (
-        <table className="tbl">
-          <thead><tr><th>#</th><th>Name</th><th>Role</th><th>Skills</th><th>Rate</th><th>RTW</th><th>Compliance</th><th></th></tr></thead>
-          <tbody>
-            {staff.map((s) => {
-              const comp = data.complianceDetail(s);
-              const chip = comp.status === 'compliant' ? 'chip-green' : comp.status === 'expiring' ? 'chip-amber' : 'chip-red';
-              return (
-                <tr key={s.id}>
-                  <td className="num muted">{s.staffNo || '—'}</td>
-                  <td>{s.name}</td>
-                  <td>{s.role}</td>
-                  <td className="muted">{data.skillsOf(s).join(', ')}</td>
-                  <td className="num">£{Number(s.rate || 0).toFixed(2)}</td>
-                  <td>
-                    <button
-                      className={`chip ${s.rtw === 'Verified' ? 'chip-green' : 'chip-amber'}`}
-                      onClick={() => toggleRtw(s)}
-                      title="Toggle RTW"
-                      style={{ cursor: 'pointer', background: 'transparent' }}
-                    >{s.rtw}</button>
-                  </td>
-                  <td><span className={`chip ${chip}`}>{comp.status}</span></td>
-                  <td>
-                    <div className="row-inline">
-                      <button className="btn btn-ghost btn-sm" onClick={() => setEditing(s)}>Edit</button>
-                      <button className="btn btn-danger btn-sm" onClick={() => del(s.id)}>Del</button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="unit-grid">
+          {staff.map((s) => {
+            const skills = data.skillsOf(s);
+            const rag = personalRag(data, s);
+            const col = unitColor(skills[0]);
+            return (
+              <div className="unit-card" key={s.id} style={{ ['--uc' as string]: col }}>
+                <div className="ev-head">
+                  <a href={`#/staff/${s.id}`} className="unit-name" style={{ marginTop: 0, fontSize: 15, color: 'inherit', textDecoration: 'none' }}>
+                    {s.name}
+                  </a>
+                  <span className={`chip ${RAG_CHIP[rag.rag]}`} style={{ marginLeft: 'auto' }}>{rag.rag === 'green' ? 'clear' : `${rag.problems} item${rag.problems !== 1 ? 's' : ''}`}</span>
+                </div>
+                <div className="unit-desc">
+                  {s.staffNo ? <span className="mono">#{s.staffNo} · </span> : null}{s.role} · £{Number(s.rate || 0).toFixed(2)}/hr
+                </div>
+                <div className="row-inline" style={{ marginTop: 10, flexWrap: 'wrap', gap: 6 }}>
+                  {skills.map((sk) => (
+                    <span key={sk} className="chip" style={{ color: unitColor(sk), fontSize: 10 }}>{sk}</span>
+                  ))}
+                  {s.canTow && <span className="chip chip-blue" style={{ fontSize: 10 }}>TOW</span>}
+                  <button
+                    className={`chip ${s.rtw === 'Verified' ? 'chip-green' : 'chip-amber'}`}
+                    style={{ fontSize: 10, cursor: 'pointer', font: 'inherit' }}
+                    onClick={() => data.save('staff', { id: s.id, rtw: s.rtw === 'Verified' ? 'Pending' : 'Verified' })}
+                    title="Toggle right-to-work"
+                  >RTW {s.rtw}</button>
+                </div>
+                <div className="row-inline" style={{ marginTop: 12 }}>
+                  <a className="btn btn-primary btn-sm" href={`#/staff/${s.id}`} style={{ textDecoration: 'none' }}>Open profile</a>
+                  <span style={{ flex: 1 }} />
+                  <button className="btn btn-ghost btn-sm" onClick={() => setEditing(s)}>Edit</button>
+                  <button className="btn btn-danger btn-sm" onClick={() => del(s.id)}>Del</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {editing && <StaffEditor value={editing} onCancel={() => setEditing(null)} onSave={save} />}

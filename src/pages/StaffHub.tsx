@@ -2,14 +2,22 @@ import { useMemo, useState } from 'react';
 import { useOpsData } from '../data/useOpsData';
 import { useAuth } from '../data/authContext';
 import { myShifts, myCompliance } from '../data/phase4';
-import type { Staff, Timesheet, Assignment, EventRec } from '../data/types';
+import { openJobsForCrew } from '../data/phase5';
+import { docState } from '../data/phase12';
+import type { Staff, Timesheet, Assignment, EventRec, DocumentRec } from '../data/types';
 
 const fmt = (iso?: string) => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+
+/** Deep link: #/staff/<staffId> opens that person's profile (operators). */
+function hashStaffId(): string {
+  const m = /^#\/staff\/(.+)$/.exec(window.location.hash || '');
+  return m ? decodeURIComponent(m[1]) : '';
+}
 
 export default function StaffHub() {
   const { data, ready, error } = useOpsData();
   const auth = useAuth();
-  const [pickedId, setPickedId] = useState('');
+  const [pickedId, setPickedId] = useState(() => hashStaffId());
 
   const staff = useMemo(
     () => (ready ? data.all<Staff>('staff') : []),
@@ -49,7 +57,9 @@ export default function StaffHub() {
           </select>
         )}
         <span className="client-status" data-status={me.rtw === 'Verified' ? 'Active' : 'Lead'}>{me.role}</span>
-        <span className="client-meta">{isCrew ? 'Your shifts, compliance and availability' : 'Viewing as this crew member (operator view)'}</span>
+        {me.staffNo && <span className="mono" style={{ fontSize: 12, color: 'var(--ink-3)' }}>#{me.staffNo}</span>}
+        {me.phone && <span className="mono" style={{ fontSize: 12, color: 'var(--ink-3)' }}>☎ {me.phone}</span>}
+        <span className="client-meta">{isCrew ? 'Your shifts, callouts, compliance and availability' : 'Viewing as this crew member (operator view)'}</span>
       </div>
 
       <div className="hub-grid">
@@ -112,9 +122,74 @@ export default function StaffHub() {
           <AvailabilityCard data={data} staffId={me.id} />
 
           <TimesheetsCard data={data} staffId={me.id} />
+
+          <MyCalloutsCard data={data} staffId={me.id} />
+
+          <MyDocumentsCard data={data} staffId={me.id} />
         </div>
       </div>
     </div>
+  );
+}
+
+/* Open callouts this person can apply for — accept here, the operator
+   approves on the Callouts page (never first-come-first-served). */
+function MyCalloutsCard({ data, staffId }: { data: ReturnType<typeof useOpsData>['data']; staffId: string }) {
+  const jobs = openJobsForCrew(data, staffId);
+  const apps = data.applicationsForStaff(staffId);
+  if (jobs.length === 0 && apps.length === 0) return null;
+
+  return (
+    <section className="card" style={{ marginTop: 16 }}>
+      <div className="card-head"><div className="card-title">My callouts</div></div>
+      {jobs.map((j) => (
+        <div className="ov-ev" key={`${j.eventId}:${j.unitId}`} style={{ ['--evc' as string]: j.color }}>
+          <span className="ev-swatch" style={{ color: j.color }} />
+          <span className="ov-ev-name">{j.eventName} · {j.unitCode}</span>
+          <span className="chip chip-blue" style={{ fontSize: 10 }}>{j.area}</span>
+          <span className="mono ov-ev-date">{fmt(j.start)}</span>
+          {j.alreadyApplied ? (
+            <span className="chip chip-amber">applied</span>
+          ) : j.eligible ? (
+            <button className="btn btn-primary btn-sm" onClick={() => data.apply(j.eventId, j.unitId, staffId, j.area)}>Accept</button>
+          ) : (
+            <span className="chip chip-red" title={j.reasons.join(', ')}>{j.reasons[0] || 'ineligible'}</span>
+          )}
+        </div>
+      ))}
+      {apps.filter((a) => a.status && a.status !== 'applied').map((a) => {
+        const e = data.get<EventRec>('events', a.eventId);
+        return (
+          <div className="ov-ev" key={a.id}>
+            <span className="ov-ev-name">{e?.name ?? a.eventId}</span>
+            <span className={`chip ${a.status === 'approved' ? 'chip-green' : 'chip-red'}`}>{a.status}</span>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+/* Personal documents from the Information Hub (RTW copies, training certs…). */
+function MyDocumentsCard({ data, staffId }: { data: ReturnType<typeof useOpsData>['data']; staffId: string }) {
+  const docs = data.all<DocumentRec>('documents').filter((x) => x.staffId === staffId);
+  if (docs.length === 0) return null;
+  const CHIP: Record<string, string> = { ok: 'chip-green', expiring: 'chip-amber', expired: 'chip-red', none: 'chip-blue' };
+  return (
+    <section className="card" style={{ marginTop: 16 }}>
+      <div className="card-head"><div className="card-title">My documents</div></div>
+      {docs.map((x) => {
+        const s = docState(x);
+        return (
+          <div className="ov-ev" key={x.id}>
+            <span className="chip chip-blue" style={{ fontSize: 10 }}>{x.docType}</span>
+            <span className="ov-ev-name">{x.title}</span>
+            <span className="mono ov-ev-date">{x.expiry ? fmt(x.expiry) : 'no expiry'}</span>
+            <span className={`chip ${CHIP[s]}`}>{s === 'none' ? '—' : s}</span>
+          </div>
+        );
+      })}
+    </section>
   );
 }
 
