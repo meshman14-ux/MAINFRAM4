@@ -49,6 +49,7 @@ beforeAll(async () => {
   await db.exec(sql('05_pipeline.sql'));
   await db.exec(sql('06_logistics.sql'));
   await db.exec(sql('07_tasks.sql'));
+  await db.exec(sql('08_system_upgrade.sql'));
   // A non-superuser role that does NOT bypass RLS (like Supabase 'authenticated').
   await db.exec(`
     create role authenticated nosuperuser nobypassrls;
@@ -192,5 +193,64 @@ describe('RLS: event tasks are operator-only (Phase 10)', () => {
   it('client cannot see event tasks at all', async () => {
     const rows = await asUser(CLIENT, `select id from mf_event_tasks`);
     expect(rows).toHaveLength(0);
+  });
+});
+
+describe('RLS: timesheets — crew self-service (Phase 12)', () => {
+  it('crew can clock in (insert their own draft sheet)', async () => {
+    await asUser(CREW, `insert into mf_timesheets(id, event_id, staff_id, work_date, status) values ('TS900','E002','S006','2026-08-15','draft')`);
+    const mine = await asUser(CREW, `select id from mf_timesheets`);
+    expect(mine.some((r) => r.id === 'TS900')).toBe(true);
+  });
+
+  it('crew cannot create a timesheet for someone else', async () => {
+    await expect(
+      asUser(CREW, `insert into mf_timesheets(id, event_id, staff_id, work_date, status) values ('TS901','E001','S001','2026-07-23','draft')`)
+    ).rejects.toBeTruthy();
+  });
+
+  it("crew cannot see other people's timesheets", async () => {
+    await asUser(OWNER, `insert into mf_timesheets(id, event_id, staff_id, work_date, status) values ('TS902','E001','S001','2026-07-23','approved')`);
+    const mine = await asUser(CREW, `select id from mf_timesheets`);
+    expect(mine.map((r) => r.id)).toEqual(['TS900']);
+  });
+
+  it('crew can submit but NOT self-approve', async () => {
+    await asUser(CREW, `update mf_timesheets set status='submitted' where id='TS900'`);
+    await expect(
+      asUser(CREW, `update mf_timesheets set status='approved' where id='TS900'`)
+    ).rejects.toBeTruthy();
+  });
+
+  it('owner sees and can approve everything', async () => {
+    await asUser(OWNER, `update mf_timesheets set status='approved' where id='TS900'`);
+    const rows = await asUser(OWNER, `select id, status from mf_timesheets order by id`);
+    expect(rows.map((r) => r.id)).toEqual(['TS900', 'TS902']);
+    expect(rows[0].status).toBe('approved');
+  });
+});
+
+describe('RLS: phase-12 commercial tables are operator-only', () => {
+  it('owner can write invoices, expenses, vehicles, documents, shopping lists', async () => {
+    await asUser(OWNER, `insert into mf_invoices(id, client_id, status, lines) values ('I001','C001','draft','[{"desc":"Bar","qty":1,"unitPrice":500}]'::jsonb)`);
+    await asUser(OWNER, `insert into mf_expenses(id, client_id, category, amount) values ('X001','C001','Fuel',80)`);
+    await asUser(OWNER, `insert into mf_vehicles(id, client_id, name, vtype) values ('V001','C001','Sprinter 1','Van')`);
+    await asUser(OWNER, `insert into mf_documents(id, client_id, title, doc_type) values ('D001','C001','PL insurance','Insurance')`);
+    await asUser(OWNER, `insert into mf_shopping_lists(id, unit_id, item) values ('L001','U001','Limes')`);
+    const inv = await asUser(OWNER, `select id from mf_invoices`);
+    expect(inv.some((r) => r.id === 'I001')).toBe(true);
+  });
+
+  it('crew and client see none of the commercial tables', async () => {
+    for (const t of ['mf_invoices', 'mf_expenses', 'mf_vehicles', 'mf_documents', 'mf_shopping_lists']) {
+      expect(await asUser(CREW, `select id from ${t}`)).toHaveLength(0);
+      expect(await asUser(CLIENT, `select id from ${t}`)).toHaveLength(0);
+    }
+  });
+
+  it('crew cannot write to a commercial table', async () => {
+    await expect(
+      asUser(CREW, `insert into mf_expenses(id, client_id, category, amount) values ('X999','C001','Fuel',1)`)
+    ).rejects.toBeTruthy();
   });
 });

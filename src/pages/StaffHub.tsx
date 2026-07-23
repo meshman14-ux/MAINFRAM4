@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useOpsData } from '../data/useOpsData';
 import { useAuth } from '../data/authContext';
 import { myShifts, myCompliance } from '../data/phase4';
-import type { Staff } from '../data/types';
+import type { Staff, Timesheet, Assignment, EventRec } from '../data/types';
 
 const fmt = (iso?: string) => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
 
@@ -110,9 +110,99 @@ export default function StaffHub() {
           </section>
 
           <AvailabilityCard data={data} staffId={me.id} />
+
+          <TimesheetsCard data={data} staffId={me.id} />
         </div>
       </div>
     </div>
+  );
+}
+
+/* My timesheets — crew clock in/out and submit; approval stays with the
+   operator (and RLS blocks self-approval server-side). */
+function TimesheetsCard({ data, staffId }: { data: ReturnType<typeof useOpsData>['data']; staffId: string }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const sheets = data.all<Timesheet>('timesheets')
+    .filter((t) => t.staffId === staffId)
+    .sort((a, b) => (b.workDate || '').localeCompare(a.workDate || ''));
+  const open = sheets.find((t) => t.clockIn && !t.clockOut);
+
+  // Clock-in targets: confirmed assignments whose event covers today.
+  const liveShifts = data.assignmentsForStaff(staffId).filter((a: Assignment) => {
+    if (!a.confirmed) return false;
+    const e = data.get<EventRec>('events', a.eventId);
+    return !!e?.start && e.start <= today && today <= (e.end || e.start);
+  });
+  const hasSheetToday = (eventId: string) =>
+    sheets.some((t) => t.eventId === eventId && t.workDate === today);
+
+  async function clockIn(a: Assignment) {
+    await data.save('timesheets', {
+      eventId: a.eventId, unitId: a.unitId, staffId, assignmentId: a.id,
+      workDate: today, clockIn: new Date().toISOString(), status: 'draft',
+    } as Partial<Timesheet>);
+  }
+  async function clockOut(t: Timesheet) {
+    await data.save('timesheets', { id: t.id, clockOut: new Date().toISOString() } as Partial<Timesheet>);
+  }
+  async function submit(t: Timesheet) {
+    await data.save('timesheets', { id: t.id, status: 'submitted' } as Partial<Timesheet>);
+  }
+
+  const STATUS_CHIP: Record<string, string> = {
+    draft: 'chip-blue', submitted: 'chip-amber', approved: 'chip-green', paid: 'chip-green',
+  };
+  const fmtT = (iso?: string) => iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—';
+
+  return (
+    <section className="card" style={{ marginTop: 16 }}>
+      <div className="card-head"><div className="card-title">My timesheets</div></div>
+
+      {open ? (
+        <div className="row-inline" style={{ marginBottom: 12 }}>
+          <span className="chip chip-green" style={{ animation: 'pulse-glow 2.4s ease-in-out infinite', ['--pulse-c' as string]: 'color-mix(in oklch, var(--neon-green) 55%, transparent)' }}>
+            Clocked in {fmtT(open.clockIn)}
+          </span>
+          <button className="btn btn-sm btn-confirm" onClick={() => clockOut(open)}>Clock out</button>
+        </div>
+      ) : liveShifts.length > 0 ? (
+        <div style={{ marginBottom: 12 }}>
+          {liveShifts.map((a) => {
+            const e = data.get<EventRec>('events', a.eventId);
+            return (
+              <div className="row-inline" key={a.id} style={{ marginBottom: 6 }}>
+                <span style={{ flex: 1, fontSize: 13.5 }}>{e?.name ?? a.eventId}</span>
+                {hasSheetToday(a.eventId)
+                  ? <span className="chip chip-green">logged today</span>
+                  : <button className="btn btn-sm btn-confirm" onClick={() => clockIn(a)}>Clock in</button>}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="muted" style={{ fontSize: 12.5, marginBottom: 10 }}>No live event today — clock-in appears here on event days.</div>
+      )}
+
+      {sheets.length === 0 ? (
+        <div className="muted" style={{ fontSize: 13 }}>No timesheets yet.</div>
+      ) : sheets.slice(0, 6).map((t) => {
+        const e = data.get<EventRec>('events', t.eventId);
+        const hrs = data.timesheetHours(t);
+        return (
+          <div className="cert-row" key={t.id} style={{ gridTemplateColumns: '1fr auto auto auto' }}>
+            <span style={{ fontSize: 13 }}>
+              {e?.name ?? t.eventId}
+              <span className="mono" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}> · {t.workDate}</span>
+            </span>
+            <span className="mono" style={{ fontSize: 12 }}>{hrs ? `${hrs.toFixed(1)}h` : `${fmtT(t.clockIn)}–${fmtT(t.clockOut)}`}</span>
+            <span className={`chip ${STATUS_CHIP[t.status]}`}>{t.status}</span>
+            {t.status === 'draft' && t.clockOut
+              ? <button className="btn btn-ghost btn-sm" onClick={() => submit(t)}>Submit</button>
+              : <span />}
+          </div>
+        );
+      })}
+    </section>
   );
 }
 

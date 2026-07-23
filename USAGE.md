@@ -66,8 +66,11 @@ The client-acquisition flow: prospects move lead → contacted → diagnostic
 implementation plan; accounts hold the client record.
 
 ## Staff Hub (`#/staff`) — crew
-Your shifts (confirm/withdraw), your compliance and certificates, and the
-availability calendar — tap a day to mark yourself unavailable.
+Your shifts (confirm/withdraw), your compliance and certificates, the
+availability calendar — tap a day to mark yourself unavailable — and **My
+timesheets**: on an event day, clock in when you start, clock out when you
+finish, then submit the sheet. Your operator approves it (the database
+blocks self-approval), and approved hours flow into payroll.
 
 ## Callouts & Open Jobs
 Broadcast a staffing callout per event; crew apply from Staff Hub; approve

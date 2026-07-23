@@ -145,6 +145,23 @@ begin
   end loop;
 end $$;
 
+-- ---------- timesheets: crew self-service ----------
+-- Crew read their own sheets and can create/edit them while still
+-- draft/submitted (clock in/out from Staff Hub). Approving and paying
+-- stay operator actions — the with-check blocks self-approval.
+drop policy if exists timesheets_crew_read on mf_timesheets;
+create policy timesheets_crew_read on mf_timesheets
+  for select using (staff_id = mf_staff_id());
+
+drop policy if exists timesheets_crew_insert on mf_timesheets;
+create policy timesheets_crew_insert on mf_timesheets
+  for insert with check (staff_id = mf_staff_id() and status in ('draft','submitted'));
+
+drop policy if exists timesheets_crew_update on mf_timesheets;
+create policy timesheets_crew_update on mf_timesheets
+  for update using (staff_id = mf_staff_id() and status in ('draft','submitted'))
+  with check (staff_id = mf_staff_id() and status in ('draft','submitted'));
+
 -- ---------- realtime ----------
 do $$
 declare t text;
