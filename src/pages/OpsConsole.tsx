@@ -13,9 +13,15 @@ import { StaffingTab } from '../components/console/StaffingTab';
 const TABS = ['Events', 'Units', 'Staff', 'Stock', 'Staffing'] as const;
 type Tab = typeof TABS[number];
 
+/** Deep link: #/console/<clientId> preselects that operator. */
+function hashClientId(): string {
+  const m = /^#\/console\/([^/]+)/.exec(window.location.hash || '');
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
 export default function OpsConsole() {
   const { data, ready, error } = useOpsData();
-  const [clientId, setClientId] = useState<string>('');
+  const [clientId, setClientId] = useState<string>(() => hashClientId());
   const [tab, setTab] = useState<Tab>('Events');
 
   const clients = useMemo(
@@ -24,8 +30,8 @@ export default function OpsConsole() {
     [ready, data.meta().updatedAt]
   );
 
-  // Default to the first client once loaded.
-  const activeId = clientId || clients[0]?.id || '';
+  // Default to the deep-linked client, else the first one loaded.
+  const activeId = (clientId && clients.some((c) => c.id === clientId) ? clientId : '') || clients[0]?.id || '';
   const client = clients.find((c) => c.id === activeId) || null;
 
   // Console totals — events by status plus fleet, headcount and the

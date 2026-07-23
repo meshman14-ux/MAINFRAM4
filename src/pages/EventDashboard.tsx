@@ -59,7 +59,7 @@ export default function EventDashboard() {
           <span className="status-pill" data-kind={st.kind}>{st.label}</span>
           <span className="row-inline" style={{ marginLeft: 'auto' }}>
             <a className="btn btn-ghost btn-sm" href="#/events" style={{ textDecoration: 'none' }}>Register</a>
-            <a className="btn btn-primary btn-sm" href="#/console" style={{ textDecoration: 'none' }}>Open console</a>
+            <a className="btn btn-primary btn-sm" href={`#/console/${e.clientId}`} style={{ textDecoration: 'none' }}>Open console</a>
           </span>
         </div>
         <div className="ev-grid">

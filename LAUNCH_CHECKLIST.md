@@ -7,6 +7,9 @@ one-time task except the last section.
 ## Before inviting anyone
 
 - [ ] **Deploy** per `DEPLOY.md` (Supabase project + migrations + Vercel).
+- [ ] **Migrations current**: run everything in `supabase/RUN_ALL.md` order —
+      on an existing install that means `08_system_upgrade.sql` (timesheets,
+      invoices, expenses, fleet, documents, shopping lists).
 - [ ] **Verify RLS is live**: in the Supabase SQL editor run
       `select relname, relrowsecurity from pg_class where relname like 'mf_%' and relkind='r';`
       — every table must be `true`. If any table shows `false`, re-run `02_rls.sql`.

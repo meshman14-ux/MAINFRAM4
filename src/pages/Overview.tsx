@@ -73,7 +73,7 @@ export default function Overview() {
             <div className="ev-head">
               <span className="unit-name" style={{ marginTop: 0 }}>{client.name}</span>
               <span className="client-status" data-status={client.status}>{client.status}</span>
-              <a className="btn btn-primary btn-sm" href="#/console" style={{ marginLeft: 'auto', textDecoration: 'none' }}>Console</a>
+              <a className="btn btn-primary btn-sm" href={`#/console/${client.id}`} style={{ marginLeft: 'auto', textDecoration: 'none' }}>Console</a>
             </div>
             <div className="ev-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
               <div className="ev-field"><div className="ev-label">Events</div><div className="fv mono">{events.length}</div></div>
