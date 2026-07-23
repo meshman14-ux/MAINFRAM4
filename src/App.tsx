@@ -5,6 +5,7 @@ import OpsConsole from './pages/OpsConsole';
 import ClientAccounts from './pages/ClientAccounts';
 import ClientDiagnostic from './pages/ClientDiagnostic';
 import ClientProposal from './pages/ClientProposal';
+import ImplementationPlan from './pages/ImplementationPlan';
 import EventsRegister from './pages/EventsRegister';
 import Calendar from './pages/Calendar';
 import StaffHub from './pages/StaffHub';
@@ -56,6 +57,7 @@ const ROUTES: Record<string, RouteDef> = {
   accounts: { page: 'Accounts',  el: <ClientAccounts />, roles: ['owner', 'manager'] },
   diagnostic: { page: 'Diagnostic', el: <ClientDiagnostic />, roles: ['owner', 'manager'] },
   proposal: { page: 'Proposal', el: <ClientProposal />, roles: ['owner', 'manager'] },
+  plan: { page: 'Impl. Plan', el: <ImplementationPlan />, roles: ['owner', 'manager'] },
   callouts: { page: 'Callouts',  el: <Callouts />,      roles: ['owner', 'manager'] },
   onboard:  { page: 'Onboard',   el: <Onboarding />,    roles: ['owner', 'manager'] },
   readiness:{ page: 'Readiness', el: <Readiness />,     roles: ['owner', 'manager'] },

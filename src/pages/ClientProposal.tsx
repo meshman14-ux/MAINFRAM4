@@ -235,6 +235,7 @@ export default function ClientProposal() {
           {names.map((n) => <option key={n} value={n}>{n}</option>)}
         </select>
         <span style={{ flex: 1 }} />
+        <a className="btn" href={`#/plan/${encodeURIComponent(active)}`}>Implementation plan →</a>
         <button className="btn" onClick={seedCover}>Cover note</button>
         <button className="btn btn-primary" onClick={() => window.print()}>Print / Save PDF</button>
       </div>
