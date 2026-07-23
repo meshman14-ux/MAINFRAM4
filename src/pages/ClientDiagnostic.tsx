@@ -265,6 +265,7 @@ export default function ClientDiagnostic() {
         {activeClient && (
           <a className="btn" href={`#/proposal/${encodeURIComponent(activeClient)}`}>Generate proposal →</a>
         )}
+        <a className="btn" href="#/onboard" title="Won the client? Set up their operator record, units and crew">Onboard →</a>
         <button className="btn" onClick={() => window.print()} title="Print the questionnaire to gather answers on paper">Print</button>
         <button className="btn btn-primary" onClick={saveClient} disabled={!canSave || saving}>
           {saving ? 'Saving…' : activeClient ? 'Save changes' : 'Save client'}

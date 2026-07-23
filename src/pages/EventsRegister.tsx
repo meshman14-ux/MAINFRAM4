@@ -19,17 +19,46 @@ export default function EventsRegister() {
   if (error) return <div className="p4"><div className="banner">Couldn't load data: {error}</div></div>;
   if (!ready) return <div className="state"><div><div className="spinner" /><div className="eyebrow">Loading register</div></div></div>;
 
+  const live = rows.filter((r) => r.status === 'live').length;
+  const staffed = rows.filter((r) => r.need > 0 && r.filled >= r.need).length;
+  const stockRisk = rows.filter((r) => r.stockLow > 0).length;
+
+  function exportCsv() {
+    const csv = [
+      'Event,Client,Location,Start,End,Units,Crew filled,Crew need,Confirmed,Stock low',
+      ...rows.map((r) => [
+        `"${r.name.replace(/"/g, "'")}"`, `"${(r.clientName || '').replace(/"/g, "'")}"`,
+        `"${(r.loc || '').replace(/"/g, "'")}"`, r.start || '', r.end || '',
+        r.units, r.filled, r.need, r.confirmed, r.stockLow,
+      ].join(',')),
+    ].join('\n');
+    const b = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(b);
+    const a = document.createElement('a'); a.href = url; a.download = 'events-register.csv';
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 120);
+  }
+
   return (
     <div className="p4">
       <div className="toolbar">
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22 }}>Events register</h2>
-        <div className="segmented">
-          {SCOPES.map((s) => (
-            <button key={s} aria-pressed={scope === s} onClick={() => setScope(s)}>
-              {s[0].toUpperCase() + s.slice(1)}
-            </button>
-          ))}
+        <div className="row-inline">
+          <div className="segmented">
+            {SCOPES.map((s) => (
+              <button key={s} aria-pressed={scope === s} onClick={() => setScope(s)}>
+                {s[0].toUpperCase() + s.slice(1)}
+              </button>
+            ))}
+          </div>
+          <button className="btn btn-sm" onClick={exportCsv} disabled={!rows.length}>Export .csv</button>
         </div>
+      </div>
+
+      <div className="kpi-row">
+        <div className="kpi-chip"><div className="k">Events</div><div className="v" style={{ color: 'var(--neon-cyan)' }}>{rows.length}</div></div>
+        <div className="kpi-chip"><div className="k">Live now</div><div className="v" style={{ color: live ? 'var(--ok)' : 'var(--ink-3)' }}>{live}</div></div>
+        <div className="kpi-chip"><div className="k">Fully staffed</div><div className="v" style={{ color: 'var(--neon-green)' }}>{staffed}/{rows.length}</div></div>
+        <div className="kpi-chip"><div className="k">Stock risk</div><div className="v" style={{ color: stockRisk ? 'var(--neon-yellow)' : 'var(--ink-3)' }}>{stockRisk}</div></div>
       </div>
 
       {rows.length === 0 ? (

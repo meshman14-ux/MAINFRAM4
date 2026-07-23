@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { OpsData } from '../../data/opsData';
 import type { Unit, StockLine, ChecklistItem } from '../../data/types';
 import { unitColor } from './unitTheme';
+import { generateResearch } from '../../data/phase12';
 
 interface Props { data: OpsData; clientId: string; }
 const TYPES = ['Bar', 'Coffee', 'Food', 'Cocktail', 'Catering', 'Support'];
@@ -189,6 +190,9 @@ function UnitDetailsEditor({ data, unit, detail, onClose }: {
   }
 
   const byCat = CATS.map((cat) => ({ cat, items: cl.filter((c) => c.cat === cat) })).filter((g) => g.items.length);
+  // Research-generated requirements for this unit's purpose — same generator
+  // that feeds Stock suggestions and the Compliance guide.
+  const research = generateResearch(unit.type);
 
   return (
     <div className="unit-card unit-details" style={{ ['--uc' as string]: col, marginTop: 18 }}>
@@ -251,6 +255,21 @@ function UnitDetailsEditor({ data, unit, detail, onClose }: {
           onKeyDown={(e) => { if (e.key === 'Enter') addItem(); }}
         />
         <button className="btn btn-primary btn-sm" onClick={addItem} disabled={!newItem.trim()}>Add</button>
+      </div>
+
+      <div className="ud-grid" style={{ marginTop: 16 }}>
+        <div>
+          <div className="ev-label" style={{ marginBottom: 6 }}>Required compliance ({unit.type})</div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, lineHeight: 1.7, color: 'var(--ink-2)' }}>
+            {research.compliance.map((c) => <li key={c}>{c}</li>)}
+          </ul>
+        </div>
+        <div>
+          <div className="ev-label" style={{ marginBottom: 6 }}>On-site requirements</div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, lineHeight: 1.7, color: 'var(--ink-2)' }}>
+            {research.requirements.map((c) => <li key={c}>{c}</li>)}
+          </ul>
+        </div>
       </div>
     </div>
   );

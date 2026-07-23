@@ -54,7 +54,11 @@ export default function Onboarding() {
           {step === 0 && (
             <div>
               <h2 className="wiz-h">Create the operator</h2>
-              <p className="wiz-sub">The business you're onboarding — a caterer, bar or food-trader.</p>
+              <p className="wiz-sub">
+                The business you're onboarding — a caterer, bar or food-trader.
+                Ran a <a href="#/diagnostic" style={{ color: 'var(--accent)' }}>diagnostic</a> first?
+                Its answers stay linked to the same client name.
+              </p>
               <div style={{ display: 'grid', gap: 12 }}>
                 <label>Business name<input className="inp" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Coastal Kitchen" /></label>
                 <label>Main contact<input className="inp" value={contact} onChange={(e) => setContact(e.target.value)} placeholder="e.g. Sam Reid" /></label>
