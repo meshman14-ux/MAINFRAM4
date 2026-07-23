@@ -9,6 +9,8 @@
    State persists in kv 'eventDocs' ({events, active}) — syncs like all kv. */
 import { useMemo, useState, type CSSProperties } from 'react';
 import { useOpsData } from '../data/useOpsData';
+import type { Client, DocumentRec, DocType } from '../data/types';
+import { docState } from '../data/phase12';
 
 const MONO = "'JetBrains Mono', ui-monospace, monospace";
 
@@ -19,8 +21,18 @@ interface DocDef {
 interface DocEvent {
   id: string; name: string; alcohol: boolean; created: number;
   statuses: Record<string, string>;
+  clientId?: string;                  // operator this checklist belongs to
+  links?: Record<string, string>;     // library doc id -> mf_documents row id
 }
 interface DocStore { events?: DocEvent[]; active?: string | null; }
+
+/* Library category -> Information Hub document type. */
+const CAT_TO_DOCTYPE: Record<string, DocType> = {
+  'Insurance': 'Insurance', 'Food Safety': 'Hygiene', 'Gas & Electrical': 'Safety',
+  'Fire & Safety': 'Safety', 'Alcohol & Trading': 'Licence',
+  'Vehicle & Transport': 'General', 'Staff': 'General',
+};
+const docTypeFor = (d: DocDef): DocType => (d.id === 'rams' ? 'RAMS' : CAT_TO_DOCTYPE[d.cat] || 'General');
 
 const DOCS: DocDef[] = [
   { id: 'pli', cat: 'Insurance', name: 'Public Liability Insurance', applies: 'Per business', issuer: 'Insurer', renewal: 'Annual', mand: true, why: 'Covers injury or damage claims from the public. Event organisers almost universally require proof (£5–10m) before confirming your pitch.' },
@@ -63,6 +75,8 @@ export default function EventDocs() {
   const [cat, setCat] = useState('all');
   const [draftName, setDraftName] = useState('');
   const [draftAlcohol, setDraftAlcohol] = useState(false);
+  const [draftClient, setDraftClient] = useState('');
+  const [attachDates, setAttachDates] = useState<Record<string, string>>({});
   const [advice, setAdvice] = useState('');
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [rams, setRams] = useState('');
@@ -79,12 +93,43 @@ export default function EventDocs() {
 
   async function persist(next: DocStore) { await data.kvSet('eventDocs', next); }
 
+  const clients = useMemo(
+    () => (ready ? data.all<Client>('clients') : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ready, data.meta().updatedAt]
+  );
+
   async function addEvent() {
     const name = draftName.trim();
     if (!name) return;
-    const evn: DocEvent = { id: 'e' + Date.now(), name, alcohol: draftAlcohol, created: Date.now(), statuses: {} };
+    const evn: DocEvent = {
+      id: 'e' + Date.now(), name, alcohol: draftAlcohol, created: Date.now(), statuses: {},
+      clientId: draftClient || clients[0]?.id || undefined,
+    };
     await persist({ events: [...events, evn], active: evn.id });
     setDraftName(''); setDraftAlcohol(false); setAdvice('');
+  }
+
+  /** Attach a real document: creates an mf_documents row (with expiry, so
+      the Information Hub tracks it) and marks the checklist item Ready. */
+  async function attachDoc(evX: DocEvent, d: DocDef) {
+    const expiry = attachDates[d.id];
+    const saved = await data.save('documents', {
+      clientId: evX.clientId || clients[0]?.id,
+      title: d.name,
+      docType: docTypeFor(d),
+      expiry: expiry || undefined,
+      notes: `Attached from the ${evX.name} event checklist`,
+    } as Partial<DocumentRec>);
+    await persist({
+      events: events.map((e) => (e.id === evX.id ? {
+        ...e,
+        statuses: { ...e.statuses, [d.id]: 'Ready' },
+        links: { ...(e.links || {}), [d.id]: saved.id },
+      } : e)),
+      active,
+    });
+    setAttachDates((p) => ({ ...p, [d.id]: '' }));
   }
   async function deleteEvent() {
     if (!ev0 || !confirm(`Delete the checklist for ${ev0.name}?`)) return;
@@ -258,6 +303,11 @@ export default function EventDocs() {
               <input className="inp" placeholder="Event name" value={draftName} style={{ marginBottom: 8 }}
                 onChange={(e) => setDraftName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') addEvent(); }} />
+              {clients.length > 0 && (
+                <select className="sel" style={{ marginBottom: 8 }} value={draftClient} onChange={(e) => setDraftClient(e.target.value)} aria-label="Operator">
+                  {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              )}
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--ink-2)', cursor: 'pointer', marginBottom: 10, userSelect: 'none' }}>
                 <input type="checkbox" checked={draftAlcohol} onChange={(e) => setDraftAlcohol(e.target.checked)} style={{ width: 15, height: 15, accentColor: 'var(--accent)' }} />
                 Serving alcohol (bar unit)
@@ -302,12 +352,32 @@ export default function EventDocs() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {apps.filter((d) => d.cat === c.name).map((d) => {
                           const cur = ev0.statuses[d.id] || 'Missing';
+                          const linkId = ev0.links?.[d.id];
+                          const linked = linkId ? data.get<DocumentRec>('documents', linkId) : null;
+                          const linkedState = linked ? docState(linked) : null;
                           return (
                             <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--panel)', border: '1px solid var(--panel-line)', borderLeft: `3px solid ${ST_COLOR[cur]}`, borderRadius: 9, padding: '11px 14px', flexWrap: 'wrap' }}>
                               <div style={{ flex: 1, minWidth: 150 }} title={d.why}>
                                 <div style={{ fontSize: 13.5, fontWeight: 600 }}>{d.name}</div>
                                 <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{d.applies} · renew {d.renewal}</div>
                               </div>
+                              {linked ? (
+                                <a href="#/compliance" className={`chip ${linkedState === 'expired' ? 'chip-red' : linkedState === 'expiring' ? 'chip-amber' : 'chip-green'}`}
+                                  style={{ textDecoration: 'none', fontSize: 10.5 }}
+                                  title="Registered in the Information Hub — click to open">
+                                  📎 {linked.expiry || 'no expiry'}{linkedState === 'expired' ? ' · EXPIRED' : linkedState === 'expiring' ? ' · expiring' : ''}
+                                </a>
+                              ) : (
+                                <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                                  <input className="inp" type="date" aria-label={`Expiry for ${d.name}`}
+                                    style={{ width: 'auto', padding: '4px 6px', fontSize: 11.5 }}
+                                    value={attachDates[d.id] || ''}
+                                    onChange={(e) => setAttachDates((p) => ({ ...p, [d.id]: e.target.value }))} />
+                                  <button className="btn btn-primary btn-sm" style={{ fontSize: 10.5 }}
+                                    onClick={() => attachDoc(ev0, d)}
+                                    title="Register in the Information Hub and mark Ready">📎 Attach</button>
+                                </span>
+                              )}
                               <div style={{ display: 'flex', gap: 4 }}>
                                 {STATUSES.map((s) => (
                                   <button key={s} onClick={() => setStatus(d.id, s)} style={{
