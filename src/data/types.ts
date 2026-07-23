@@ -51,6 +51,15 @@ export interface Callout {
   open: boolean;
   message?: string;
   sentAt?: number;
+  /** Explicit per-unit skill requests ("2 bartenders on BAR-01").
+      When absent, requests derive from staffing gaps. */
+  requests?: CalloutRequest[];
+}
+
+export interface CalloutRequest {
+  unitId: string;
+  area: Area;
+  needed: number;
 }
 
 export interface ChecklistItem {

@@ -5,7 +5,7 @@
    readiness hard gate later.
    ============================================================ */
 import type { OpsData } from './opsData';
-import type { Staff, Unit, ChecklistItem } from './types';
+import type { Staff, Unit, ChecklistItem, EventRec, CalloutRequest, Candidate } from './types';
 
 export type Rag = 'red' | 'amber' | 'green';
 
@@ -70,6 +70,53 @@ export function unitCompliance(unit: Unit): UnitCompliance {
     rag: requiredOpen > 0 ? 'red' : open.length > 0 ? 'amber' : 'green',
     open,
   };
+}
+
+/* ---------------- callouts by skill (module 2) ---------------- */
+
+export interface CalloutFillRow extends CalloutRequest {
+  unitCode: string;
+  unitName: string;
+  filled: number;          // assignments on the unit (approval creates one)
+  pending: number;         // applications awaiting operator approval
+}
+
+/** The event's skill requests — explicit ones if the operator set them,
+    otherwise derived from each unit's staffing gap. */
+export function calloutRequests(d: OpsData, e: EventRec): CalloutRequest[] {
+  if (e.callout?.requests?.length) return e.callout.requests;
+  return d.unitsForEvent(e).flatMap((u) => {
+    const assigned = d.assignmentsForEvent(e.id).filter((a) => a.unitId === u.id).length;
+    const gap = Math.max(0, (u.crew || 0) - assigned);
+    return gap > 0 ? [{ unitId: u.id, area: d.areaOfUnit(u), needed: gap }] : [];
+  });
+}
+
+/** Live fill per request + the event rollup for Home's crew tile. */
+export function calloutFill(d: OpsData, e: EventRec): { rows: CalloutFillRow[]; needed: number; filled: number } {
+  const rows = calloutRequests(d, e).map((r) => {
+    const u = d.get<Unit>('units', r.unitId);
+    const filled = d.assignmentsForEvent(e.id).filter((a) => a.unitId === r.unitId).length;
+    const pending = d.all<{ id: string; eventId: string; unitId?: string; status?: string }>('applications')
+      .filter((p) => p.eventId === e.id && p.unitId === r.unitId && (p.status ?? 'applied') === 'applied').length;
+    return { ...r, unitCode: u?.code ?? '', unitName: u?.name ?? '', filled, pending };
+  });
+  return {
+    rows,
+    needed: rows.reduce((n, r) => n + r.needed, 0),
+    filled: rows.reduce((n, r) => n + Math.min(r.filled, r.needed), 0),
+  };
+}
+
+/** Auto-shortlist for a request: the unit's suitable, unblocked, unassigned
+    candidates, best first. Reuses the staffing suitability engine. */
+export function autoShortlist(d: OpsData, e: EventRec, unitId: string, limit = 5): Candidate[] {
+  const unit = d.get<Unit>('units', unitId);
+  if (!unit) return [];
+  const assigned = new Set(d.assignmentsForEvent(e.id).map((a) => a.staffId));
+  return d.suitableForUnit(unit, { event: e })
+    .filter((c) => !c.blocked && !assigned.has(c.id))
+    .slice(0, limit);
 }
 
 /** Both levels rolled up for the Information Hub header. */

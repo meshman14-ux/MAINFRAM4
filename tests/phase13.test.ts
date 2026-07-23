@@ -2,7 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import { OpsData } from '../src/data/opsData';
 import type { OpsState, Staff, Unit } from '../src/data/types';
-import { personalRag, unitCompliance, complianceRollup } from '../src/data/phase13';
+import { personalRag, unitCompliance, complianceRollup, calloutRequests, calloutFill } from '../src/data/phase13';
+import type { EventRec } from '../src/data/types';
 
 const future = (days: number) => {
   const d = new Date(); d.setDate(d.getDate() + days);
@@ -13,9 +14,24 @@ function seed(): OpsState {
   return {
     meta: { version: 1, updatedAt: Date.now() },
     clients: { C001: { id: 'C001', name: 'JP Events', status: 'Active' } },
-    events: {}, applications: {}, kv: {}, availability: {}, pipeline: {},
+    events: {
+      E001: { id: 'E001', clientId: 'C001', name: 'Latitude', start: '2026-07-23', end: '2026-07-26' },
+      // E002 carries explicit skill requests set by the operator
+      E002: {
+        id: 'E002', clientId: 'C001', name: 'Cardiff', start: '2026-08-15',
+        callout: { open: true, requests: [{ unitId: 'U001', area: 'Bar', needed: 3 }] },
+      },
+    },
+    applications: {
+      P1: { id: 'P1', eventId: 'E001', unitId: 'U001', staffId: 'S002', status: 'applied' },
+    },
+    kv: {}, availability: {}, pipeline: {},
     movements: {}, eventTasks: {}, timesheets: {}, vehicles: {}, invoices: {},
-    expenses: {}, documents: {}, shoppingLists: {}, assignments: {}, stock: {},
+    expenses: {}, documents: {}, shoppingLists: {},
+    assignments: {
+      A1: { id: 'A1', eventId: 'E001', unitId: 'U001', staffId: 'S001', area: 'Bar', confirmed: true },
+    },
+    stock: {},
     units: {
       U001: {
         id: 'U001', clientId: 'C001', type: 'Bar', code: 'BAR-01', name: 'Main Bar', crew: 2,
@@ -78,6 +94,35 @@ describe('unitCompliance', () => {
   });
   it('green when a unit has no compliance checks outstanding', () => {
     expect(unitCompliance(d.get<Unit>('units', 'U002')!).rag).toBe('green');
+  });
+});
+
+describe('callouts by skill', () => {
+  const d = store();
+  it('derives requests from staffing gaps when none are set', () => {
+    // U001 crew target 2, one assigned on E001 -> gap 1; U002 target 1 -> gap 1
+    const reqs = calloutRequests(d, d.get<EventRec>('events', 'E001')!);
+    expect(reqs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ unitId: 'U001', area: 'Bar', needed: 1 }),
+      expect.objectContaining({ unitId: 'U002', needed: 1 }),
+    ]));
+  });
+  it('uses explicit operator-set requests when present', () => {
+    const reqs = calloutRequests(d, d.get<EventRec>('events', 'E002')!);
+    expect(reqs).toEqual([{ unitId: 'U001', area: 'Bar', needed: 3 }]);
+  });
+  it('computes live fill and pending applications per request', () => {
+    const fill = calloutFill(d, d.get<EventRec>('events', 'E001')!);
+    const bar = fill.rows.find((r) => r.unitId === 'U001')!;
+    expect(bar.filled).toBe(1);
+    expect(bar.pending).toBe(1);
+    expect(fill.needed).toBe(2);
+    expect(fill.filled).toBe(1);
+  });
+  it('caps fill at needed so overfilled units cannot mask gaps elsewhere', () => {
+    const fill = calloutFill(d, d.get<EventRec>('events', 'E002')!);
+    expect(fill.filled).toBe(0);   // E002 has no assignments
+    expect(fill.needed).toBe(3);
   });
 });
 

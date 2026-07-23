@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useOpsData } from '../data/useOpsData';
-import type { Client, EventRec } from '../data/types';
-import { openPositionsForEvent, applicantsForEvent } from '../data/phase5';
+import type { Client, EventRec, Callout, CalloutRequest } from '../data/types';
+import { applicantsForEvent } from '../data/phase5';
+import { calloutFill, autoShortlist } from '../data/phase13';
+import { unitColor } from '../components/console/unitTheme';
 
 const fmt = (iso?: string) => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
 
@@ -45,13 +47,26 @@ export default function Callouts() {
 }
 
 function CalloutEvent({ data, event }: { data: ReturnType<typeof useOpsData>['data']; event: EventRec }) {
-  const positions = openPositionsForEvent(data, event);
+  const fill = calloutFill(data, event);
   const applicants = applicantsForEvent(data, event.id);
   const open = !!event.callout?.open;
+  const pct = fill.needed ? Math.round((fill.filled / fill.needed) * 100) : 100;
 
   async function toggle() { await data.toggleCallout(event.id, !open); }
   async function approve(id: string) { await data.approveApplication(id); }
   async function decline(id: string) { await data.declineApplication(id); }
+
+  /** Operator adjusts how many of a skill this unit is requesting. */
+  async function setNeeded(unitId: string, area: CalloutRequest['area'], needed: number) {
+    await data.patchJson<EventRec>('events', event.id, 'callout', (cur: Callout | undefined) => {
+      const base: Callout = cur ?? { open: false };
+      const requests = fill.rows.map((r) => ({ unitId: r.unitId, area: r.area, needed: r.needed }));
+      const i = requests.findIndex((r) => r.unitId === unitId);
+      if (i >= 0) requests[i] = { ...requests[i], area, needed: Math.max(0, needed) };
+      else requests.push({ unitId, area, needed: Math.max(0, needed) });
+      return { ...base, requests };
+    });
+  }
 
   return (
     <div className="callout-event" style={{ ['--evc' as string]: data.eventColor(event.id) }}>
@@ -59,24 +74,59 @@ function CalloutEvent({ data, event }: { data: ReturnType<typeof useOpsData>['da
         <span style={{ width: 10, height: 10, borderRadius: 3, background: data.eventColor(event.id) }} />
         <span className="callout-name">{event.name}</span>
         <span className="mono" style={{ fontSize: 12, color: 'var(--ink-3)' }}>{fmt(event.start)}{event.end && event.end !== event.start ? `–${fmt(event.end)}` : ''}</span>
+        {fill.needed > 0 && (
+          <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: pct >= 100 ? 'var(--ok)' : 'var(--warn)' }}>
+            {fill.filled}/{fill.needed} filled
+          </span>
+        )}
         <label className="switch callout-toggle">
           <input type="checkbox" checked={open} onChange={toggle} />
           {open ? 'Callout open' : 'Callout closed'}
         </label>
       </div>
 
-      {positions.length === 0 ? (
-        <div className="muted" style={{ fontSize: 13 }}>Fully staffed — no open positions.</div>
+      {fill.rows.length === 0 ? (
+        <div className="muted" style={{ fontSize: 13 }}>Fully staffed — no open requests.</div>
       ) : (
         <div style={{ marginBottom: applicants.length ? 16 : 0 }}>
-          <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 8 }}>OPEN POSITIONS</div>
-          {positions.map((p) => (
-            <div className="pos-row" key={p.unitId}>
-              <span className="chip chip-blue" style={{ fontSize: 10 }}>{p.area}</span>
-              <span>{p.unitCode} · {p.unitName}</span>
-              <span className="pos-gap">{p.gap} needed</span>
-            </div>
-          ))}
+          <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 8 }}>SKILL REQUESTS — PER UNIT</div>
+          {fill.rows.map((r) => {
+            const u = data.get<{ type?: string }>('units', r.unitId);
+            const col = unitColor(u?.type);
+            const shortlist = open ? autoShortlist(data, event, r.unitId) : [];
+            const rowPct = r.needed ? Math.min(100, Math.round((r.filled / r.needed) * 100)) : 100;
+            return (
+              <div className="pos-row" key={r.unitId} style={{ ['--uc' as string]: col, flexWrap: 'wrap' }}>
+                <span className="chip unit-type-chip" style={{ fontSize: 10, color: col }}>{r.area}</span>
+                <span>{r.unitCode} · {r.unitName}</span>
+                <span className="row-inline" aria-label={`Needed on ${r.unitCode}`}>
+                  <input
+                    className="inp" type="number" min={0}
+                    style={{ width: 58, padding: '4px 6px', fontSize: 12.5 }}
+                    value={r.needed}
+                    onChange={(e) => setNeeded(r.unitId, r.area, Number(e.target.value))}
+                  />
+                  <span className="muted" style={{ fontSize: 11.5 }}>needed</span>
+                </span>
+                <span className="unit-check" style={{ flex: 1, minWidth: 130, marginTop: 0 }}>
+                  <span className="unit-check-bar" style={{ ['--uc' as string]: r.filled >= r.needed ? 'var(--neon-green)' : 'var(--neon-yellow)' }}>
+                    <span style={{ display: 'block', height: '100%', width: `${rowPct}%`, background: 'var(--uc)', boxShadow: '0 0 8px var(--uc)' }} />
+                  </span>
+                  <span className="mono">{r.filled}/{r.needed}{r.pending ? ` · ${r.pending} pending` : ''}</span>
+                </span>
+                {shortlist.length > 0 && (
+                  <span className="row-inline" style={{ width: '100%', flexWrap: 'wrap', gap: 6 }}>
+                    <span className="mono" style={{ fontSize: 10, color: 'var(--ink-3)' }}>AUTO-SHORTLIST:</span>
+                    {shortlist.map((c) => (
+                      <span key={c.id} className="chip chip-blue" style={{ fontSize: 10.5 }} title={`Suitability ${c.score}`}>
+                        {c.name} · {c.score}
+                      </span>
+                    ))}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
