@@ -28,6 +28,8 @@ import Login from './pages/Login';
 import SetNewPassword from './pages/SetNewPassword';
 import { useAccess } from './data/useAccess';
 import { AuthContext } from './data/authContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import WriteErrorToast from './components/WriteErrorToast';
 import './styles/tokens.css';
 import './styles/home.css';
 import './styles/console.css';
@@ -135,8 +137,9 @@ export default function App() {
     <AuthContext.Provider value={auth}>
       <div className="app-shell">
         <TopBar current={active.page} role={role} email={auth.email} onSignOut={auth.signOut} />
-        {active.el}
+        <ErrorBoundary key={active.page}>{active.el}</ErrorBoundary>
       </div>
+      <WriteErrorToast />
     </AuthContext.Provider>
   );
 }

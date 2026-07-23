@@ -76,8 +76,25 @@ export class OpsData {
     'timesheets', 'vehicles', 'invoices', 'expenses', 'documents', 'shoppingLists',
   ];
 
-  /** Initial load of every table into the in-memory mirror. */
+  // Load-once guard lives on the store (not a module global) so reset() can
+  // clear it and the next session reloads. `loadInvoked` also gates retries.
+  private loadInvoked = false;
+
+  /** Initial load of every table into the in-memory mirror. Idempotent:
+      a second call while loaded/loading is a no-op; a failed load clears
+      the guard so it can retry. */
   async load(): Promise<void> {
+    if (this.loadInvoked) return;
+    this.loadInvoked = true;
+    try {
+      await this.loadInner();
+    } catch (e) {
+      this.loadInvoked = false;   // allow a retry after failure
+      throw e;
+    }
+  }
+
+  private async loadInner(): Promise<void> {
     const tables = Object.keys(DB_TABLE) as TableName[];
     await Promise.all(
       tables.map(async (t) => {
@@ -178,6 +195,47 @@ export class OpsData {
     this.subs.slice().forEach((f) => { try { f(); } catch { /* noop */ } });
   }
 
+  /* ---------------- write-error channel (audit C5) ---------------- */
+  // A failed write used to (a) leave the optimistic mirror change in place and
+  // (b) reject silently. Every write now rolls the mirror back and reports the
+  // failure here so the UI can surface a toast instead of losing data quietly.
+  private errorSubs: ((msg: string) => void)[] = [];
+
+  subscribeError(fn: (msg: string) => void): () => void {
+    this.errorSubs.push(fn);
+    return () => {
+      const i = this.errorSubs.indexOf(fn);
+      if (i >= 0) this.errorSubs.splice(i, 1);
+    };
+  }
+
+  private notifyError(msg: string): void {
+    this.errorSubs.slice().forEach((f) => { try { f(msg); } catch { /* noop */ } });
+  }
+
+  /** Roll the optimistic mirror change back, surface the error, re-throw. */
+  private failWrite(op: string, error: { message: string }, restore: () => void): never {
+    try { restore(); } catch { /* noop */ }
+    this.emit();
+    const msg = `${op}: ${error.message}`;
+    this.notifyError(msg);
+    throw new Error(msg);
+  }
+
+  /* ---------------- lifecycle: reset on sign-out (audit M1) ---------------- */
+  // The in-memory mirror outlived a session: after sign-out + sign-in as a
+  // different user the stale rows were still served until a hard reload. Reset
+  // tears down the realtime channel and clears the mirror so the next load()
+  // starts clean for the new session.
+  reset(): void {
+    if (this.channel) { try { supabase.removeChannel(this.channel); } catch { /* noop */ } this.channel = null; }
+    this.db = emptyState();
+    this.localWrites.clear();
+    this.ready = false;
+    this.loadInvoked = false;   // let the next session's load() run
+    this.emit();
+  }
+
   /** Realtime: patch the mirror on any change, then emit. */
   private subscribeRealtime(): void {
     if (this.channel) return;
@@ -206,8 +264,62 @@ export class OpsData {
       { event: '*', schema: 'public', table: 'mf_event_tasks' },
       (payload: any) => this.applyTaskRealtime(payload)
     );
+    // kv / certs / availability are in the realtime publication but were never
+    // subscribed (audit M2) — pins, Event Docs, diagnostics, cert uploads and
+    // availability changes only synced on reload. Wire them the same way.
+    ch.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'mf_kv' },
+      (payload: any) => this.applyKvRealtime(payload)
+    );
+    ch.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'mf_certs' },
+      (payload: any) => this.applyCertRealtime(payload)
+    );
+    ch.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'mf_availability' },
+      (payload: any) => this.applyAvailabilityRealtime(payload)
+    );
     ch.subscribe();
     this.channel = ch;
+  }
+
+  private applyKvRealtime(payload: any): void {
+    const ns = payload.new?.ns ?? payload.old?.ns;
+    if (!ns) return;
+    if (payload.eventType === 'DELETE') { delete this.db.kv[ns]; this.emit(); return; }
+    if (this.isOwnEcho('kv' as any, ns)) return;
+    this.db.kv[ns] = payload.new.data;
+    this.emit();
+  }
+
+  private applyCertRealtime(payload: any): void {
+    if (payload.eventType === 'DELETE') {
+      const id = payload.old?.id;
+      if (id) delete this.db.certs[id];
+    } else {
+      const r = payload.new;
+      if (!r?.id) return;
+      if (this.isOwnEcho('certs' as any, r.id)) return;
+      this.db.certs[r.id] = { id: r.id, staffId: r.staff_id, type: r.type, expiry: r.expiry ?? undefined };
+    }
+    this.emit();
+  }
+
+  private applyAvailabilityRealtime(payload: any): void {
+    if (payload.eventType === 'DELETE') {
+      const r = payload.old;
+      if (r?.staff_id && r?.date) delete this.db.availability[`${r.staff_id}:${r.date}`];
+    } else {
+      const r = payload.new;
+      if (!r?.staff_id || !r?.date) return;
+      const key = `${r.staff_id}:${r.date}`;
+      if (this.isOwnEcho('availability' as any, key)) return;
+      this.db.availability[key] = { staffId: r.staff_id, date: r.date, available: r.available };
+    }
+    this.emit();
   }
 
   private applyTaskRealtime(payload: any): void {
@@ -277,9 +389,13 @@ export class OpsData {
   }
 
   uid(t: TableName): string {
-    return (PREFIX[t] || 'X') + '-' +
-      Date.now().toString(36).slice(-4) +
-      Math.random().toString(36).slice(2, 5);
+    // Keep the readable table prefix, but use a full UUID for the body so
+    // ids can't collide (the old ~46k-per-ms random space could birthday-
+    // collide, and save() upserts — a collision would silently overwrite).
+    const rand = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+    return (PREFIX[t] || 'X') + '-' + rand;
   }
 
   /* ---------------- generic reads (sync, off the mirror) ---------------- */
@@ -314,6 +430,7 @@ export class OpsData {
       if (data) base = (fromRow[t] as (x: Row) => any)(data);
     }
 
+    const prev = bucket[obj.id];                   // for rollback
     const merged = Object.assign({}, base, obj) as T & { id: string };
     bucket[obj.id] = merged;                       // optimistic
     this.markLocalWrite(t, merged.id);
@@ -321,7 +438,9 @@ export class OpsData {
 
     const row = (toRow[t] as (x: any) => Row)(merged);
     const { error } = await supabase.from(DB_TABLE[t]).upsert(row);
-    if (error) throw new Error(`save ${t}: ${error.message}`);
+    if (error) this.failWrite(`save ${t}`, error, () => {
+      if (prev === undefined) delete bucket[obj.id!]; else bucket[obj.id!] = prev;
+    });
     return merged;
   }
 
@@ -344,6 +463,14 @@ export class OpsData {
 
   async remove(t: TableName, id: string): Promise<void> {
     const bucket = (this.db as any)[t] as Record<string, any>;
+    // Snapshot every bucket this delete may cascade into, for rollback.
+    const cascade: TableName[] =
+      t === 'clients' ? ['events', 'units', 'staff'] :
+      t === 'events' ? ['assignments', 'applications'] :
+      t === 'units' ? ['assignments', 'stock'] :
+      t === 'staff' ? ['assignments', 'applications'] : [];
+    const snap: Partial<Record<TableName, Record<string, any>>> = {};
+    [t, ...cascade].forEach((tt) => { snap[tt] = { ...(this.db as any)[tt] }; });
     this.markLocalWrite(t, id);
     delete bucket[id];
     // Cascades are enforced by ON DELETE CASCADE in the DB; mirror
@@ -368,7 +495,9 @@ export class OpsData {
     this.emit();
 
     const { error } = await supabase.from(DB_TABLE[t]).delete().eq('id', id);
-    if (error) throw new Error(`remove ${t}: ${error.message}`);
+    if (error) this.failWrite(`remove ${t}`, error, () => {
+      (Object.keys(snap) as TableName[]).forEach((tt) => { (this.db as any)[tt] = snap[tt]; });
+    });
   }
 
   /* ---------------- kv store ---------------- */
@@ -379,11 +508,15 @@ export class OpsData {
   }
 
   async kvSet<T>(ns: string, val: T): Promise<T> {
+    const prev = this.db.kv[ns];
     this.db.kv[ns] = val;
+    this.markLocalWrite('kv' as any, ns);
     this.emit();
     const { error } = await supabase.from('mf_kv')
       .upsert({ ns, data: val, updated_at: new Date().toISOString() });
-    if (error) throw new Error(`kvSet ${ns}: ${error.message}`);
+    if (error) this.failWrite(`kvSet ${ns}`, error, () => {
+      if (prev === undefined) delete this.db.kv[ns]; else this.db.kv[ns] = prev;
+    });
     return val;
   }
 
@@ -658,6 +791,7 @@ export class OpsData {
   /** Upsert a cert for a staff member. */
   async saveCert(cert: Partial<Cert> & { staffId: string; type: string }): Promise<Cert> {
     const id = cert.id || `CERT-${cert.staffId}-${Date.now().toString(36).slice(-4)}`;
+    const prev = this.db.certs[id];
     const full: Cert = { id, staffId: cert.staffId, type: cert.type, expiry: cert.expiry };
     this.db.certs[id] = full;
     this.markLocalWrite('certs' as any, id);
@@ -665,16 +799,21 @@ export class OpsData {
     const { error } = await supabase.from('mf_certs').upsert({
       id, staff_id: full.staffId, type: full.type, expiry: full.expiry ?? null,
     });
-    if (error) throw new Error(`saveCert: ${error.message}`);
+    if (error) this.failWrite('saveCert', error, () => {
+      if (prev === undefined) delete this.db.certs[id]; else this.db.certs[id] = prev;
+    });
     return full;
   }
 
   async removeCert(id: string): Promise<void> {
+    const prev = this.db.certs[id];
     delete this.db.certs[id];
     this.markLocalWrite('certs' as any, id);
     this.emit();
     const { error } = await supabase.from('mf_certs').delete().eq('id', id);
-    if (error) throw new Error(`removeCert: ${error.message}`);
+    if (error) this.failWrite('removeCert', error, () => {
+      if (prev !== undefined) this.db.certs[id] = prev;
+    });
   }
 
   availabilityForStaff(sid: string): AvailabilityDay[] {
@@ -689,17 +828,23 @@ export class OpsData {
   /** Toggle a single day's availability for a staff member. */
   async setAvailability(sid: string, dateISO: string, available: boolean): Promise<void> {
     const key = `${sid}:${dateISO}`;
+    const prev = this.db.availability[key];
+    this.markLocalWrite('availability' as any, key);
     if (available) {
       // "available" is the default — represent it by removing the block row.
       delete this.db.availability[key];
       this.emit();
       const { error } = await supabase.from('mf_availability').delete().eq('staff_id', sid).eq('date', dateISO);
-      if (error) throw new Error(`setAvailability: ${error.message}`);
+      if (error) this.failWrite('setAvailability', error, () => {
+        if (prev !== undefined) this.db.availability[key] = prev;
+      });
     } else {
       this.db.availability[key] = { staffId: sid, date: dateISO, available: false };
       this.emit();
       const { error } = await supabase.from('mf_availability').upsert({ staff_id: sid, date: dateISO, available: false });
-      if (error) throw new Error(`setAvailability: ${error.message}`);
+      if (error) this.failWrite('setAvailability', error, () => {
+        if (prev === undefined) delete this.db.availability[key]; else this.db.availability[key] = prev;
+      });
     }
   }
 
@@ -719,6 +864,7 @@ export class OpsData {
   private async savePipelineRow(entry: Partial<PipelineEntry> & { id?: string }): Promise<PipelineEntry> {
     const id = entry.id || this.uid('pipeline' as any);
     const bucket = this.db.pipeline;
+    const prev = bucket[id];
     const merged = Object.assign({}, bucket[id], entry, { id }) as PipelineEntry;
     bucket[id] = merged;
     this.markLocalWrite('pipeline' as any, id);
@@ -729,7 +875,9 @@ export class OpsData {
       value: merged.value ?? null, next_step: merged.nextStep ?? null,
     };
     const { error } = await supabase.from('mf_pipeline').upsert(row);
-    if (error) throw new Error(`pipeline save: ${error.message}`);
+    if (error) this.failWrite('pipeline save', error, () => {
+      if (prev === undefined) delete bucket[id]; else bucket[id] = prev;
+    });
     return merged;
   }
 
@@ -785,11 +933,12 @@ export class OpsData {
   }
 
   async removePipelineEntry(id: string): Promise<void> {
+    const prev = this.db.pipeline[id];
     delete this.db.pipeline[id];
     this.markLocalWrite('pipeline' as any, id);
     this.emit();
     const { error } = await supabase.from('mf_pipeline').delete().eq('id', id);
-    if (error) throw new Error(`pipeline remove: ${error.message}`);
+    if (error) this.failWrite('pipeline remove', error, () => { if (prev !== undefined) this.db.pipeline[id] = prev; });
   }
 
   /**
@@ -848,6 +997,7 @@ export class OpsData {
   private async saveMovementRow(m: Partial<Movement> & { id?: string }): Promise<Movement> {
     const id = m.id || this.uid('movements' as any);
     const bucket = this.db.movements;
+    const prev = bucket[id];
     const merged = Object.assign({}, bucket[id], m, { id }) as Movement;
     bucket[id] = merged;
     this.markLocalWrite('movements' as any, id);
@@ -858,7 +1008,9 @@ export class OpsData {
       depart_time: merged.departTime ?? null, tow: merged.tow, status: merged.status,
     };
     const { error } = await supabase.from('mf_movements').upsert(row);
-    if (error) throw new Error(`movement save: ${error.message}`);
+    if (error) this.failWrite('movement save', error, () => {
+      if (prev === undefined) delete bucket[id]; else bucket[id] = prev;
+    });
     return merged;
   }
 
@@ -884,11 +1036,12 @@ export class OpsData {
   }
 
   async removeMovement(id: string): Promise<void> {
+    const prev = this.db.movements[id];
     delete this.db.movements[id];
     this.markLocalWrite('movements' as any, id);
     this.emit();
     const { error } = await supabase.from('mf_movements').delete().eq('id', id);
-    if (error) throw new Error(`movement remove: ${error.message}`);
+    if (error) this.failWrite('movement remove', error, () => { if (prev !== undefined) this.db.movements[id] = prev; });
   }
 
   /**
@@ -955,6 +1108,7 @@ export class OpsData {
   private async saveTaskRow(t: Partial<EventTask> & { id?: string }): Promise<EventTask> {
     const id = t.id || this.uid('eventTasks' as any);
     const bucket = this.db.eventTasks;
+    const prev = bucket[id];
     const merged = Object.assign({}, bucket[id], t, { id }) as EventTask;
     bucket[id] = merged;
     this.markLocalWrite('eventTasks' as any, id);
@@ -965,7 +1119,9 @@ export class OpsData {
       assigned_to: merged.assignedTo ?? null, notes: merged.notes ?? null,
     };
     const { error } = await supabase.from('mf_event_tasks').upsert(row);
-    if (error) throw new Error(`task save: ${error.message}`);
+    if (error) this.failWrite('task save', error, () => {
+      if (prev === undefined) delete bucket[id]; else bucket[id] = prev;
+    });
     return merged;
   }
 
@@ -986,11 +1142,12 @@ export class OpsData {
   }
 
   async removeTask(id: string): Promise<void> {
+    const prev = this.db.eventTasks[id];
     delete this.db.eventTasks[id];
     this.markLocalWrite('eventTasks' as any, id);
     this.emit();
     const { error } = await supabase.from('mf_event_tasks').delete().eq('id', id);
-    if (error) throw new Error(`task remove: ${error.message}`);
+    if (error) this.failWrite('task remove', error, () => { if (prev !== undefined) this.db.eventTasks[id] = prev; });
   }
 
   /** A task is overdue if it has a due date in the past and isn't done. */

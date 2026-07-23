@@ -10,6 +10,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { opsData } from './opsData';
 import type { Role } from './types';
 
 export interface Access {
@@ -72,7 +73,10 @@ export function useAccess(): AuthState {
       setSession(sess);
       setError(null);
       if (event === 'PASSWORD_RECOVERY') setIsRecovery(true);
-      if (event === 'SIGNED_OUT') setIsRecovery(false);
+      if (event === 'SIGNED_OUT') {
+        setIsRecovery(false);
+        opsData.reset();   // clear the mirror + realtime channel (audit M1)
+      }
       if (sess?.user) await loadAccess(sess.user.id);
       else setAccess(null);
     });

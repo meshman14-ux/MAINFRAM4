@@ -14,8 +14,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { opsData, OpsData } from './opsData';
 
-let loadStarted = false;
-
 export interface UseOpsData {
   data: OpsData;
   ready: boolean;
@@ -25,19 +23,19 @@ export interface UseOpsData {
 export function useOpsData(): UseOpsData {
   const [error, setError] = useState<string | null>(null);
 
-  // Kick the initial load exactly once across the whole app.
-  useEffect(() => {
-    if (loadStarted) return;
-    loadStarted = true;
-    opsData.load().catch((e) => setError(String(e?.message || e)));
-  }, []);
-
-  // Re-render whenever the store emits.
+  // Re-render whenever the store emits (local write or realtime).
   const ready = useSyncExternalStore(
     (cb) => opsData.subscribe(cb),
     () => opsData.isReady(),
     () => false
   );
+
+  // Trigger load whenever the store isn't ready. load() is idempotent (its own
+  // guard), so this no-ops once loaded — but after sign-out reset() flips
+  // ready→false, so the next authed page reloads fresh for the new session.
+  useEffect(() => {
+    if (!ready) opsData.load().catch((e) => setError(String(e?.message || e)));
+  }, [ready]);
 
   return { data: opsData, ready, error };
 }
