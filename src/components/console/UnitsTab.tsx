@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { OpsData } from '../../data/opsData';
 import type { Unit, StockLine, ChecklistItem, PalBranch } from '../../data/types';
 import { unitColor } from './unitTheme';
+import { gatherUnitContext, scoreUnit } from '../../lib/unitAI';
 import { generateResearch } from '../../data/phase12';
 
 interface Props { data: OpsData; clientId: string; }
@@ -119,12 +120,21 @@ export function UnitsTab({ data, clientId }: Props) {
             const col = unitColor(u.type);
             const cl = u.checklist || [];
             const done = cl.filter((c) => c.on).length;
+            const ctx = gatherUnitContext(data, u.id);
+            const scores = ctx ? scoreUnit(ctx) : null;
+            const sc = (v: number) => v >= 80 ? 'var(--ok)' : v >= 50 ? 'var(--warn)' : 'var(--danger)';
             return (
               <div className="unit-card" key={u.id} style={{ ['--uc' as string]: col }}>
                 <div className="ev-head">
                   <span className="ev-swatch" style={{ color: col }} />
                   <span className="chip unit-type-chip">{u.type}</span>
-                  <span className="mono" style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-3)' }}>{u.code}</span>
+                  {scores && (
+                    <span className="row-inline" style={{ gap: 4, marginLeft: 'auto' }} title={`Health ${scores.health}/100 · Readiness ${scores.readiness}/100 (live)`}>
+                      <span className="mono" style={{ fontSize: 10.5, color: sc(scores.health) }}>H {scores.health}</span>
+                      <span className="mono" style={{ fontSize: 10.5, color: sc(scores.readiness) }}>R {scores.readiness}</span>
+                    </span>
+                  )}
+                  <span className="mono" style={{ marginLeft: scores ? 6 : 'auto', fontSize: 11, color: 'var(--ink-3)' }}>{u.code}</span>
                 </div>
                 <div className="unit-name">{u.name}</div>
                 {u.desc && <div className="unit-desc">{u.desc}</div>}
