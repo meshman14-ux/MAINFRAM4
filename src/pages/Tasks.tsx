@@ -196,6 +196,7 @@ const STATUS_META: Record<TaskStatus, { label: string; col: string }> = {
 function UnitTaskBoard({ data, clientId }: { data: Store; clientId: string }) {
   const [title, setTitle] = useState('');
   const [unitId, setUnitId] = useState('');
+  const [dragOver, setDragOver] = useState<TaskStatus | null>(null);
   const units = data.unitsForClient(clientId);
   const tasks = useMemo(
     () => data.all<Task>('tasks').filter((t) => t.clientId === clientId),
@@ -212,6 +213,13 @@ function UnitTaskBoard({ data, clientId }: { data: Store; clientId: string }) {
     const i = TASK_STATUSES.indexOf(t.status) + dir;
     if (i < 0 || i >= TASK_STATUSES.length) return;
     await data.save<Partial<Task>>('tasks', { id: t.id, status: TASK_STATUSES[i] as TaskStatus });
+  }
+  async function drop(e: React.DragEvent, st: TaskStatus) {
+    e.preventDefault();
+    setDragOver(null);
+    const id = e.dataTransfer.getData('text/task-id');
+    const t = id ? tasks.find((x) => x.id === id) : null;
+    if (t && t.status !== st) await data.save<Partial<Task>>('tasks', { id: t.id, status: st });
   }
 
   return (
@@ -232,12 +240,18 @@ function UnitTaskBoard({ data, clientId }: { data: Store; clientId: string }) {
           const meta = STATUS_META[st as TaskStatus];
           const col = tasks.filter((t) => t.status === st);
           return (
-            <div key={st} style={{ background: 'var(--inset)', borderRadius: 10, padding: 10, minHeight: 80 }}>
+            <div key={st}
+              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOver(st as TaskStatus); }}
+              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null); }}
+              onDrop={(e) => drop(e, st as TaskStatus)}
+              style={{ background: 'var(--inset)', borderRadius: 10, padding: 10, minHeight: 80, outline: dragOver === st ? `1.5px dashed ${meta.col}` : undefined, outlineOffset: -4, transition: 'outline-color .15s' }}>
               <div className="mono" style={{ fontSize: 10.5, color: meta.col, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>{meta.label} · {col.length}</div>
               {col.map((t) => {
                 const u = t.unitId ? data.get<Unit>('units', t.unitId) : null;
                 return (
-                  <div key={t.id} className="card" style={{ padding: '8px 10px', marginBottom: 8, borderLeft: `2px solid ${meta.col}` }}>
+                  <div key={t.id} className="card" draggable
+                    onDragStart={(e) => { e.dataTransfer.setData('text/task-id', t.id); e.dataTransfer.effectAllowed = 'move'; }}
+                    style={{ padding: '8px 10px', marginBottom: 8, borderLeft: `2px solid ${meta.col}`, cursor: 'grab' }}>
                     <div style={{ fontSize: 12.5, textDecoration: t.status === 'done' ? 'line-through' : undefined, color: t.status === 'done' ? 'var(--ink-3)' : undefined }}>{t.title}</div>
                     <div className="row-inline" style={{ marginTop: 6, gap: 6, alignItems: 'center' }}>
                       {u && <a className="mono" href={`#/unit/${u.id}`} style={{ fontSize: 10.5, color: 'var(--accent)', textDecoration: 'none' }}>{u.code}</a>}
