@@ -14,7 +14,7 @@
       Compliance deadlines. */
 import { useMemo, useState } from 'react';
 import { useOpsData } from '../data/useOpsData';
-import type { EventRec, Unit, Staff, Cert, Client } from '../data/types';
+import type { EventRec, Unit, Staff, Cert, Client, Assignment } from '../data/types';
 import { unitColor } from '../components/console/unitTheme';
 import { prepPanel } from '../data/phase13';
 
@@ -278,6 +278,121 @@ function WeekView({ v, data, open, pick }: {
               })}
           </div>
         </div>
+
+        <WeekAllocations v={v} data={data} days={days} open={open} />
+      </div>
+    </div>
+  );
+}
+
+/* Weekly allocation chart — how the crew is spread across the week.
+   Top: per-day filled/needed totals as stacked mini bars. Below: a
+   rota-style grid, one row per allocated crew member, one cell per day,
+   coloured by the event they're on (solid = confirmed, faded = not). */
+function WeekAllocations({ v, data, days, open }: {
+  v: { events: EventRec[]; opColor: (c: string) => string; onDay: (d: string) => EventRec[] };
+  data: ReturnType<typeof useOpsData>['data'];
+  days: string[]; open: (id: string) => void;
+}) {
+  // per-day totals across every event covering that day
+  const totals = days.map((d) => {
+    const evs = v.onDay(d);
+    const need = evs.reduce((n, e) => n + Object.values(data.staffingFor(e)).reduce((x: number, y) => x + (y as number), 0), 0);
+    const got = evs.reduce((n, e) => n + data.assignmentsForEvent(e.id).length, 0);
+    const conf = evs.reduce((n, e) => n + data.assignmentsForEvent(e.id).filter((a) => a.confirmed).length, 0);
+    return { d, need, got, conf };
+  });
+  const maxNeed = Math.max(1, ...totals.map((t) => Math.max(t.need, t.got)));
+
+  // rota rows: every staff member with an assignment touching the week
+  const weekEvents = v.events.filter((e) => (e.end || e.start!) >= days[0] && e.start! <= days[days.length - 1]);
+  const byStaff = new Map<string, { staff: Staff; cells: Record<string, { a: Assignment; e: EventRec }[]> }>();
+  weekEvents.forEach((e) => {
+    data.assignmentsForEvent(e.id).forEach((a) => {
+      const staff = data.get<Staff>('staff', a.staffId);
+      if (!staff) return;
+      const row = byStaff.get(staff.id) || { staff, cells: {} };
+      days.forEach((d) => {
+        if (e.start! <= d && d <= (e.end || e.start!)) {
+          (row.cells[d] = row.cells[d] || []).push({ a, e });
+        }
+      });
+      byStaff.set(staff.id, row);
+    });
+  });
+  const rows = [...byStaff.values()].sort((x, y) => x.staff.name.localeCompare(y.staff.name));
+
+  return (
+    <div style={{ marginTop: 22 }}>
+      <div className="ev-label" style={{ marginBottom: 8 }}>Daily allocations — crew across the week</div>
+
+      {/* per-day totals chart */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, alignItems: 'end', marginBottom: 6, minHeight: 64 }}>
+        {totals.map((t) => {
+          const ok = t.need > 0 && t.got >= t.need;
+          return (
+            <div key={t.d} title={`${fmtDay(t.d)} · ${t.got}/${t.need} allocated · ${t.conf} confirmed`}
+              style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 2, height: 64 }}>
+              {t.need > t.got && (
+                <div style={{ height: `${((t.need - t.got) / maxNeed) * 100}%`, minHeight: t.need > t.got ? 3 : 0, borderRadius: 3, background: 'color-mix(in oklch, var(--warn) 30%, transparent)', border: '1px dashed var(--warn)' }} />
+              )}
+              {t.got > 0 && (
+                <div style={{ height: `${(t.got / maxNeed) * 100}%`, minHeight: 3, borderRadius: 3, background: ok ? 'var(--ok)' : 'var(--warn)', boxShadow: `0 0 7px ${ok ? 'var(--ok)' : 'var(--warn)'}` }} />
+              )}
+              <span className="mono" style={{ fontSize: 9, color: ok ? 'var(--ok)' : t.need ? 'var(--warn)' : 'var(--ink-3)', textAlign: 'center' }}>
+                {t.need ? `${t.got}/${t.need}` : '—'}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* rota grid */}
+      {rows.length === 0 ? (
+        <div className="muted" style={{ fontSize: 12 }}>No crew allocated this week yet — staff events in the Console or run a callout.</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '110px repeat(7, 1fr)', gap: 4, alignItems: 'center' }}>
+          <span />
+          {days.map((d) => (
+            <span key={d} className="mono" style={{ fontSize: 9, color: d === todayISO() ? 'var(--neon-cyan)' : 'var(--ink-3)', textAlign: 'center' }}>{fmtDay(d).split(' ')[0]}</span>
+          ))}
+          {rows.map(({ staff, cells }) => (
+            [
+              <span key={staff.id} className="mono" title={staff.role} style={{ fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {staff.name}
+              </span>,
+              ...days.map((d) => {
+                const here = cells[d] || [];
+                if (here.length === 0) {
+                  const off = data.isUnavailable(staff.id, d);
+                  return <div key={d} title={off ? 'Marked unavailable' : 'Free'} style={{ height: 20, borderRadius: 5, background: off ? 'color-mix(in oklch, var(--danger) 14%, transparent)' : 'var(--inset)', border: `1px ${off ? 'dashed var(--danger)' : 'solid var(--panel-line)'}` }} />;
+                }
+                const { a, e } = here[0];
+                const col = data.eventColor(e.id);
+                const un = data.get<Unit>('units', a.unitId);
+                return (
+                  <div key={d} role="button" tabIndex={0}
+                    onClick={() => open(e.id)} onKeyDown={(k) => { if (k.key === 'Enter') open(e.id); }}
+                    title={`${e.name} · ${un?.code || ''}${a.area ? ` · ${a.area}` : ''} · ${a.confirmed ? 'confirmed' : 'NOT confirmed'}${here.length > 1 ? `\n⚠ also on ${here.slice(1).map((x) => x.e.name).join(', ')}` : ''}`}
+                    style={{
+                      height: 20, borderRadius: 5, cursor: 'pointer', overflow: 'hidden',
+                      background: a.confirmed ? `color-mix(in oklch, ${col} 60%, var(--panel))` : `color-mix(in oklch, ${col} 22%, var(--panel))`,
+                      border: `1px ${a.confirmed ? 'solid' : 'dashed'} ${here.length > 1 ? 'var(--danger)' : col}`,
+                      boxShadow: here.length > 1 ? '0 0 8px var(--danger)' : a.confirmed ? `0 0 6px color-mix(in oklch, ${col} 35%, transparent)` : 'none',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                    <span className="mono" style={{ fontSize: 8, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', padding: '0 3px' }}>
+                      {here.length > 1 ? '⚠ 2×' : (un?.code || e.name)}
+                    </span>
+                  </div>
+                );
+              }),
+            ]
+          ))}
+        </div>
+      )}
+      <div className="row-inline" style={{ marginTop: 10, gap: 14, flexWrap: 'wrap' }}>
+        <span className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)' }}>solid = confirmed · faded dash = unconfirmed · red dash = unavailable · ⚠ = double-booked</span>
       </div>
     </div>
   );
