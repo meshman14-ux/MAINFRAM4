@@ -7,9 +7,14 @@
 import { useMemo } from 'react';
 import { useOpsData } from '../data/useOpsData';
 import type { Client } from '../data/types';
+import type { DocumentRec, Timesheet } from '../data/types';
 import { homeKpis, needsAction, eventRows } from '../data/home';
 import { eventStatus } from '../components/console/eventStatus';
 import { complianceSummary, reorderForClient } from '../data/phase6';
+import { clientPnL, docState } from '../data/phase12';
+import { prepPanel } from '../data/phase13';
+
+const gbp = (n: number) => '£' + Math.round(n).toLocaleString('en-GB');
 
 const fmtDate = (iso?: string) =>
   iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
@@ -19,11 +24,16 @@ export default function Home() {
 
   const view = useMemo(() => {
     if (!ready) return null;
-    // per-operator management boards (from the old Overview tab)
+    // per-operator management boards (from the old Overview tab), enriched
+    // with the money / documents / payroll / readiness signals an owner
+    // needs to run the business from this one page.
+    const today = new Date().toISOString().slice(0, 10);
     const boards = data.all<Client>('clients').map((client) => {
       const events = data.eventsForClient(client.id)
         .sort((a, b) => (a.start || '').localeCompare(b.start || ''))
         .map((e) => ({ e, st: eventStatus(e), color: data.eventColor(e.id) }));
+      const upcoming = events.filter((x) => x.st.kind !== 'past').map((x) => x.e);
+      const eventIds = new Set(events.map((x) => x.e.id));
       return {
         client,
         events,
@@ -32,6 +42,13 @@ export default function Home() {
         lowStock: reorderForClient(data, client.id).length,
         comp: complianceSummary(data, client.id),
         logi: data.logisticsSummary(client.id),
+        pnl: clientPnL(data, client.id),
+        docsFlagged: data.all<DocumentRec>('documents')
+          .filter((x) => x.clientId === client.id)
+          .filter((x) => { const s = docState(x, today); return s === 'expired' || s === 'expiring'; }).length,
+        sheetsPending: data.all<Timesheet>('timesheets')
+          .filter((t) => t.status === 'submitted' && eventIds.has(t.eventId)).length,
+        blocked: upcoming.slice(0, 3).filter((e) => prepPanel(data, e).blocked).length,
       };
     });
     return { kpis: homeKpis(data), actions: needsAction(data), rows: eventRows(data), boards };
@@ -167,29 +184,68 @@ export default function Home() {
         </section>
       </div>
 
+      {/* this week — the short-term organiser */}
+      {rows.some((r) => r.daysOut <= 7) && (
+        <section className="card" style={{ marginTop: 24 }}>
+          <div className="card-head">
+            <div className="card-title">This week</div>
+            <a href="#/calendar" style={{ fontSize: 12.5, color: 'var(--accent)' }}>Calendar →</a>
+          </div>
+          {rows.filter((r) => r.daysOut <= 7).map((r) => (
+            <div className="ov-ev" key={r.id} style={{ ['--evc' as string]: r.color }}>
+              <span className="reg-badge" data-status={r.daysOut <= 0 ? 'live' : undefined} style={{ fontSize: 10.5 }}>{r.countdownLabel}</span>
+              <span className="ev-swatch" style={{ color: r.color }} />
+              <span className="ov-ev-name">{r.name}<span className="mono" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}> · {r.clientName}</span></span>
+              <span className="mono ov-ev-date" style={{ color: r.need > 0 && r.filled >= r.need ? 'var(--ok)' : 'var(--warn)' }}>
+                {r.filled}/{r.need} crew · {r.confirmed} conf
+              </span>
+              <a className="btn btn-ghost btn-sm" href={`#/event/${r.id}`} style={{ textDecoration: 'none' }}>Open →</a>
+            </div>
+          ))}
+        </section>
+      )}
+
       {/* per-operator management boards (merged in from the old Overview) */}
       <div className="toolbar" style={{ marginTop: 28 }}>
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 18 }}>Operators</h2>
         <span className="muted" style={{ fontSize: 12.5 }}>every operator, every event — one board</span>
       </div>
       <div className="ov-grid">
-        {boards.map(({ client, events, units, staff, lowStock, comp, logi }) => (
+        {boards.map(({ client, events, units, staff, lowStock, comp, logi, pnl, docsFlagged, sheetsPending, blocked }) => (
           <div className="unit-card" key={client.id} style={{ ['--uc' as string]: 'var(--neon-cyan)' }}>
             <div className="ev-head">
               <span className="unit-name" style={{ marginTop: 0 }}>{client.name}</span>
               <span className="client-status" data-status={client.status}>{client.status}</span>
-              <a className="btn btn-primary btn-sm" href={`#/console/${client.id}`} style={{ marginLeft: 'auto', textDecoration: 'none' }}>Console</a>
+              <span className="row-inline" style={{ marginLeft: 'auto' }}>
+                <a className="btn btn-ghost btn-sm" href="#/command" style={{ textDecoration: 'none' }}>Command</a>
+                <a className="btn btn-primary btn-sm" href={`#/console/${client.id}`} style={{ textDecoration: 'none' }}>Console</a>
+              </span>
             </div>
             <div className="ev-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
               <div className="ev-field"><div className="ev-label">Events</div><div className="fv mono">{events.length}</div></div>
               <div className="ev-field"><div className="ev-label">Units</div><div className="fv mono">{units}</div></div>
               <div className="ev-field"><div className="ev-label">Staff</div><div className="fv mono">{staff}</div></div>
+              <div className="ev-field">
+                <div className="ev-label">Net (paid basis)</div>
+                <div className="fv mono" style={{ color: pnl.net >= 0 ? 'var(--ok)' : 'var(--danger)' }}>{gbp(pnl.net)}</div>
+              </div>
+              <div className="ev-field">
+                <div className="ev-label">Outstanding</div>
+                <div className="fv mono" style={{ color: pnl.outstanding ? 'var(--warn)' : 'var(--ink-3)' }}>{gbp(pnl.outstanding)}</div>
+              </div>
+              <div className="ev-field">
+                <div className="ev-label">Payroll due</div>
+                <div className="fv mono" style={{ color: 'var(--ink-2)' }}>{gbp(pnl.payroll)}</div>
+              </div>
             </div>
-            {(lowStock > 0 || comp.blocked > 0 || logi.enRoute > 0) && (
+            {(lowStock > 0 || comp.blocked > 0 || logi.enRoute > 0 || docsFlagged > 0 || sheetsPending > 0 || blocked > 0) && (
               <div className="row-inline" style={{ marginTop: 10, flexWrap: 'wrap' }}>
-                {lowStock > 0 && <span className="chip chip-amber">{lowStock} stock line{lowStock !== 1 ? 's' : ''} low</span>}
-                {comp.blocked > 0 && <span className="chip chip-red">{comp.blocked} crew blocked</span>}
-                {logi.enRoute > 0 && <span className="chip chip-blue">{logi.enRoute} en route</span>}
+                {blocked > 0 && <a href="#/readiness" className="chip chip-red" style={{ textDecoration: 'none' }}>{blocked} event{blocked !== 1 ? 's' : ''} blocked</a>}
+                {comp.blocked > 0 && <a href="#/compliance" className="chip chip-red" style={{ textDecoration: 'none' }}>{comp.blocked} crew blocked</a>}
+                {docsFlagged > 0 && <a href="#/compliance" className="chip chip-amber" style={{ textDecoration: 'none' }}>{docsFlagged} doc{docsFlagged !== 1 ? 's' : ''} expiring</a>}
+                {lowStock > 0 && <a href="#/stock" className="chip chip-amber" style={{ textDecoration: 'none' }}>{lowStock} stock low</a>}
+                {sheetsPending > 0 && <a href="#/timesheets" className="chip chip-blue" style={{ textDecoration: 'none' }}>{sheetsPending} timesheet{sheetsPending !== 1 ? 's' : ''} to approve</a>}
+                {logi.enRoute > 0 && <a href="#/logistics" className="chip chip-blue" style={{ textDecoration: 'none' }}>{logi.enRoute} en route</a>}
               </div>
             )}
             {events.length > 0 && (
