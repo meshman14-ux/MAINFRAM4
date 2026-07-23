@@ -149,8 +149,9 @@ export function UnitsTab({ data, clientId }: Props) {
                   <span className="mono">{cl.length ? `${done}/${cl.length} checks` : 'no checklist'}</span>
                 </div>
                 <div className="row-inline" style={{ marginTop: 12 }}>
-                  <button className="btn btn-primary btn-sm" onClick={() => setOpenId(openId === u.id ? null : u.id)}>
-                    {openId === u.id ? 'Close details' : 'Add details'}
+                  <a className="btn btn-primary btn-sm" href={`#/unit/${u.id}`} style={{ textDecoration: 'none' }}>Open dashboard</a>
+                  <button className="btn btn-sm" onClick={() => setOpenId(openId === u.id ? null : u.id)}>
+                    {openId === u.id ? 'Close' : 'Add details'}
                   </button>
                   <span style={{ flex: 1 }} />
                   <button className="btn btn-ghost btn-sm" onClick={() => setEditing(u)}>Edit</button>

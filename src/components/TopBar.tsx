@@ -3,22 +3,23 @@ import { useState, useEffect, useRef } from 'react';
 type Role = 'owner' | 'manager' | 'crew' | 'client';
 
 // Primary tabs stay visible; secondary operator tools go under "More".
+// FS3 tab restructure — the agreed primary order; everything else lives in More.
 const PRIMARY: { label: string; route: string; roles: Role[] }[] = [
   { label: 'Home',      route: '#/',          roles: ['owner', 'manager'] },
   { label: 'My Events', route: '#/portal',    roles: ['client'] },
   { label: 'Command',   route: '#/command',   roles: ['owner', 'manager'] },
-  { label: 'Console',   route: '#/console',   roles: ['owner', 'manager'] },
-  { label: 'Accounts',  route: '#/accounts',  roles: ['owner', 'manager'] },
-  { label: 'Pipeline',  route: '#/pipeline',  roles: ['owner', 'manager'] },
   { label: 'Tasks',     route: '#/tasks',     roles: ['owner', 'manager'] },
-  { label: 'Callouts',  route: '#/callouts',  roles: ['owner', 'manager'] },
+  { label: 'Console',   route: '#/console',   roles: ['owner', 'manager'] },
   { label: 'Events',    route: '#/events',    roles: ['owner', 'manager', 'client'] },
   { label: 'Calendar',  route: '#/calendar',  roles: ['owner', 'manager', 'client'] },
   { label: 'Timeline',  route: '#/timeline',  roles: ['owner', 'manager'] },
-  { label: 'Timelines', route: '#/timelines', roles: ['owner', 'manager'] },
+  { label: 'Callouts',  route: '#/callouts',  roles: ['owner', 'manager'] },
   { label: 'Staff Hub', route: '#/staff',     roles: ['owner', 'manager', 'crew'] },
+  { label: 'Pipeline',  route: '#/pipeline',  roles: ['owner', 'manager'] },
+  { label: 'Accounts',  route: '#/accounts',  roles: ['owner', 'manager'] },
 ];
 const MORE: { label: string; route: string; roles: Role[] }[] = [
+  { label: 'Timelines',  route: '#/timelines',  roles: ['owner', 'manager'] },
   { label: 'Readiness',  route: '#/readiness',  roles: ['owner', 'manager'] },
   { label: 'Compliance', route: '#/compliance', roles: ['owner', 'manager'] },
   { label: 'Event Docs', route: '#/eventdocs',  roles: ['owner', 'manager'] },

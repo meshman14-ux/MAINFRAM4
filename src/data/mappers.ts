@@ -8,6 +8,7 @@
 import type {
   Client, EventRec, Unit, Staff, Assignment, StockLine, Application,
   Timesheet, Vehicle, Invoice, Expense, DocumentRec, ShoppingItem, TableName,
+  Task, UnitChecklist, UnitInsight,
 } from '../data/types';
 
 /* ---- DB table names per logical table ---- */
@@ -25,6 +26,9 @@ export const DB_TABLE: Record<TableName, string> = {
   expenses: 'mf_expenses',
   documents: 'mf_documents',
   shoppingLists: 'mf_shopping_lists',
+  tasks: 'mf_tasks',
+  unitChecklists: 'mf_unit_checklists',
+  unitInsights: 'mf_unit_insights',
 };
 
 /* ---- row -> domain ---- */
@@ -106,6 +110,20 @@ export const fromRow = {
     id: r.id, unitId: r.unit_id, item: r.item, qty: Number(r.qty) || 0,
     unit: r.unit ?? undefined, category: r.category ?? undefined, done: !!r.done,
   }),
+  tasks: (r: any): Task => ({
+    id: r.id, clientId: r.client_id ?? undefined, unitId: r.unit_id ?? undefined,
+    eventId: r.event_id ?? undefined, title: r.title, detail: r.detail ?? undefined,
+    status: r.status, assigneeStaffId: r.assignee_staff_id ?? undefined, due: r.due ?? undefined,
+  }),
+  unitChecklists: (r: any): UnitChecklist => ({
+    id: r.id, unitId: r.unit_id, kind: r.kind, items: r.items ?? [],
+  }),
+  unitInsights: (r: any): UnitInsight => ({
+    id: r.id, unitId: r.unit_id, generatedAt: r.generated_at ?? undefined,
+    healthScore: r.health_score ?? undefined, readinessScore: r.readiness_score ?? undefined,
+    insights: r.insights ?? [], summaryDaily: r.summary_daily ?? undefined,
+    summaryWeekly: r.summary_weekly ?? undefined, summaryMonthly: r.summary_monthly ?? undefined,
+  }),
 };
 
 /* ---- domain -> row (only defined keys, so partial upserts work) ---- */
@@ -176,6 +194,20 @@ export const toRow = {
   shoppingLists: (o: Partial<ShoppingItem>): any => prune({
     id: o.id, unit_id: o.unitId, item: o.item, qty: o.qty,
     unit: o.unit, category: o.category, done: o.done,
+  }),
+  tasks: (o: Partial<Task>): any => prune({
+    id: o.id, client_id: o.clientId, unit_id: o.unitId, event_id: o.eventId,
+    title: o.title, detail: o.detail, status: o.status,
+    assignee_staff_id: o.assigneeStaffId, due: o.due,
+  }),
+  unitChecklists: (o: Partial<UnitChecklist>): any => prune({
+    id: o.id, unit_id: o.unitId, kind: o.kind, items: o.items,
+  }),
+  unitInsights: (o: Partial<UnitInsight>): any => prune({
+    id: o.id, unit_id: o.unitId, generated_at: o.generatedAt,
+    health_score: o.healthScore, readiness_score: o.readinessScore,
+    insights: o.insights, summary_daily: o.summaryDaily,
+    summary_weekly: o.summaryWeekly, summary_monthly: o.summaryMonthly,
   }),
 };
 

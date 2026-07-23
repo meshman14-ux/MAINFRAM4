@@ -34,7 +34,7 @@ const PREFIX: Record<TableName, string> = {
   clients: 'C', events: 'E', units: 'U', staff: 'S',
   assignments: 'A', stock: 'K', applications: 'P', timesheets: 'T',
   vehicles: 'V', invoices: 'I', expenses: 'X', documents: 'D',
-  shoppingLists: 'L',
+  shoppingLists: 'L', tasks: 'TK', unitChecklists: 'UC', unitInsights: 'IN',
 };
 
 const AREAS: Area[] = ['Bar', 'Coffee', 'Food', 'General', 'Driver', 'Supervisor'];
@@ -74,6 +74,7 @@ export class OpsData {
       empty until the SQL is run. Core tables still fail loudly. */
   private static OPTIONAL_TABLES: TableName[] = [
     'timesheets', 'vehicles', 'invoices', 'expenses', 'documents', 'shoppingLists',
+    'tasks', 'unitChecklists', 'unitInsights',
   ];
 
   // Load-once guard lives on the store (not a module global) so reset() can
@@ -535,6 +536,32 @@ export class OpsData {
   }
   stockForUnit(uid: string): StockLine[] {
     return this.all<StockLine>('stock').filter((s) => s.unitId === uid);
+  }
+
+  /* ---- Phase 15: unit dashboard relations ---- */
+  tasksForUnit(uid: string): import('./types').Task[] {
+    return this.all<import('./types').Task>('tasks').filter((t) => t.unitId === uid);
+  }
+  tasksForEventId(eid: string): import('./types').Task[] {
+    return this.all<import('./types').Task>('tasks').filter((t) => t.eventId === eid);
+  }
+  unitChecklistsFor(uid: string): import('./types').UnitChecklist[] {
+    return this.all<import('./types').UnitChecklist>('unitChecklists').filter((c) => c.unitId === uid);
+  }
+  unitChecklist(uid: string, kind: import('./types').ChecklistKind): import('./types').UnitChecklist | null {
+    return this.unitChecklistsFor(uid).find((c) => c.kind === kind) || null;
+  }
+  insightForUnit(uid: string): import('./types').UnitInsight | null {
+    return this.all<import('./types').UnitInsight>('unitInsights')
+      .filter((i) => i.unitId === uid)
+      .sort((a, b) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))[0] || null;
+  }
+  eventsForUnit(uid: string): EventRec[] {
+    const unit = this.get<Unit>('units', uid);
+    return this.all<EventRec>('events').filter((e) => {
+      if (Array.isArray(e.unitIds) && e.unitIds.length) return e.unitIds.includes(uid);
+      return unit ? e.clientId === unit.clientId : false;
+    });
   }
   unitsForEvent(e: EventRec | null): Unit[] {
     if (!e) return [];
@@ -1431,6 +1458,7 @@ function emptyState(): OpsState {
     certs: {}, availability: {}, pipeline: {}, movements: {}, eventTasks: {},
     timesheets: {},
     vehicles: {}, invoices: {}, expenses: {}, documents: {}, shoppingLists: {},
+    tasks: {}, unitChecklists: {}, unitInsights: {},
   };
 }
 

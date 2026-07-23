@@ -158,6 +158,10 @@ export interface OpsState {
   expenses: Record<string, Expense>;
   documents: Record<string, DocumentRec>;
   shoppingLists: Record<string, ShoppingItem>;
+  // Phase 15 — unit dashboard + AI.
+  tasks: Record<string, Task>;
+  unitChecklists: Record<string, UnitChecklist>;
+  unitInsights: Record<string, UnitInsight>;
 }
 
 export interface Cert {
@@ -316,10 +320,52 @@ export interface ShoppingItem {
   done: boolean;
 }
 
+/* ---------------- Phase 15: Unit dashboard + AI ---------------- */
+
+export type TaskStatus = 'open' | 'doing' | 'done';
+export const TASK_STATUSES: TaskStatus[] = ['open', 'doing', 'done'];
+
+export interface Task {
+  id: string;
+  clientId?: string;
+  unitId?: string;
+  eventId?: string;
+  title: string;
+  detail?: string;
+  status: TaskStatus;
+  assigneeStaffId?: string;
+  due?: string;              // ISO date
+}
+
+export type ChecklistKind = 'stock' | 'paperwork' | 'equipment' | 'consumables' | 'safety' | 'operational';
+export const CHECKLIST_KINDS: ChecklistKind[] = ['stock', 'paperwork', 'equipment', 'consumables', 'safety', 'operational'];
+
+export interface UnitChecklistItem { id: string; label: string; on: boolean; note?: string }
+export interface UnitChecklist {
+  id: string;
+  unitId: string;
+  kind: ChecklistKind;
+  items: UnitChecklistItem[];
+}
+
+export interface UnitInsightItem { kind: string; tone: 'ok' | 'warn' | 'danger' | 'info'; title: string; detail?: string }
+export interface UnitInsight {
+  id: string;
+  unitId: string;
+  generatedAt?: string;
+  healthScore?: number;
+  readinessScore?: number;
+  insights: UnitInsightItem[];
+  summaryDaily?: string;
+  summaryWeekly?: string;
+  summaryMonthly?: string;
+}
+
 export type TableName =
   | 'clients' | 'events' | 'units' | 'staff'
   | 'assignments' | 'stock' | 'applications' | 'timesheets'
-  | 'vehicles' | 'invoices' | 'expenses' | 'documents' | 'shoppingLists';
+  | 'vehicles' | 'invoices' | 'expenses' | 'documents' | 'shoppingLists'
+  | 'tasks' | 'unitChecklists' | 'unitInsights';
 
 /** Derived compliance result (from staffCompliance). */
 export interface Compliance {
