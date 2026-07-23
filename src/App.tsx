@@ -11,6 +11,7 @@ import EventsRegister from './pages/EventsRegister';
 import EventDashboard from './pages/EventDashboard';
 import UnitDashboard from './pages/UnitDashboard';
 import Team from './pages/Team';
+import Branches from './pages/Branches';
 import EventDocs from './pages/EventDocs';
 import EventGantt from './pages/EventGantt';
 import TripleTimeline from './pages/TripleTimeline';
@@ -92,6 +93,7 @@ const ROUTES: Record<string, RouteDef> = {
   calendar: { page: 'Calendar',  el: <Calendar />,      roles: ['owner', 'manager', 'client'] },
   staff:    { page: 'Staff Hub', el: <StaffHub />,      roles: ['owner', 'manager', 'crew'] },
   team:     { page: 'Team',      el: <Team />,          roles: ['owner', 'manager'] },
+  branches: { page: 'Branches',  el: <Branches />,      roles: ['owner', 'manager'] },
 };
 
 /** Landing route per role after login. */
