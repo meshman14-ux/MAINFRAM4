@@ -262,6 +262,9 @@ export default function ClientDiagnostic() {
           <div className="mono" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--accent)' }}>{answeredN} / {FIELD_TOTAL}</div>
           <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>questions answered</div>
         </div>
+        {activeClient && (
+          <a className="btn" href={`#/proposal/${encodeURIComponent(activeClient)}`}>Generate proposal →</a>
+        )}
         <button className="btn" onClick={() => window.print()} title="Print the questionnaire to gather answers on paper">Print</button>
         <button className="btn btn-primary" onClick={saveClient} disabled={!canSave || saving}>
           {saving ? 'Saving…' : activeClient ? 'Save changes' : 'Save client'}

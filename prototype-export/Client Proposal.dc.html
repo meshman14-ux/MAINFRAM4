@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=IBM+Plex+Serif:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="./opsdeck-data.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:oklch(0.22 0.014 255);font-family:'Space Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:oklch(0.55 0.13 220)}
+@media print{
+ .noprint{display:none !important}
+ body{background:#fff !important}
+ .paper{box-shadow:none !important;margin:0 !important;width:100% !important}
+ .page-break{break-before:page}
+}
+</style>
+</helmet>
+<div style="min-height:100vh">
+
+  <!-- control bar (screen only) -->
+  <div class="noprint" style="position:sticky;top:0;z-index:10;background:oklch(0.165 0.025 268);border-bottom:1px solid oklch(0.32 0.035 268);padding:14px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div style="width:34px;height:34px;flex:none;border-radius:8px;background:oklch(0.62 0.25 295);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-weight:600;font-size:14px;color:oklch(0.13 0.02 268)">BA</div>
+    <div style="color:oklch(0.97 0.005 260);font-weight:700;font-size:13.5px;letter-spacing:.02em">PROPOSAL GENERATOR</div>
+    <span style="color:oklch(0.52 0.02 260);font-size:12px">Client</span>
+    <select onChange="{{ onPick }}" value="{{ picked }}" style="padding:8px 12px;border-radius:8px;border:1px solid oklch(0.32 0.035 268);background:oklch(0.21 0.028 268);color:oklch(0.97 0.005 260);font-family:inherit;font-size:13px;outline:none">
+      <sc-for list="{{ options }}" as="o" hint-placeholder-count="2"><option value="{{ o.v }}">{{ o.label }}</option></sc-for>
+    </select>
+    <span style="flex:1"></span>
+    <button onClick="{{ onDraft }}" style="{{ draftBtn }}">{{ draftLabel }}</button>
+    <button onClick="{{ onPrint }}" style="padding:9px 17px;border-radius:8px;border:1px solid oklch(0.62 0.25 295);background:oklch(0.62 0.25 295);color:oklch(0.13 0.02 268);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Print / Save PDF</button>
+  </div>
+
+  <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+  <div style="max-width:520px;margin:70px auto;text-align:center;color:oklch(0.72 0.02 260);background:oklch(0.165 0.025 268);border:1px solid oklch(0.32 0.035 268);border-radius:16px;padding:44px 40px">
+    <div style="font-size:18px;font-weight:700;color:oklch(0.97 0.005 260);margin-bottom:8px">No saved diagnostics</div>
+    <div style="font-size:13.5px;line-height:1.6">Run and save a Client Diagnostic first — the proposal is generated from it automatically.</div>
+  </div>
+  </sc-if>
+
+  <!-- the document -->
+  <sc-if value="{{ hasClient }}" hint-placeholder-val="{{ true }}">
+  <div class="paper" style="max-width:860px;margin:28px auto;background:#fbfaf8;color:oklch(0.28 0.02 255);box-shadow:0 12px 40px oklch(0.1 0.01 255/0.5);padding:64px 72px 80px">
+
+    <!-- masthead -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid oklch(0.62 0.25 295);padding-bottom:22px">
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.18em;color:oklch(0.55 0.02 255)">MAINFRAME</div>
+        <div style="font-family:'IBM Plex Serif',serif;font-size:29px;font-weight:600;margin-top:10px;line-height:1.15">Operations Diagnostic &amp; Proposal</div>
+        <div style="font-size:14px;color:oklch(0.45 0.02 255);margin-top:6px">Prepared for <strong>{{ clientName }}</strong></div>
+      </div>
+      <div style="text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px;color:oklch(0.55 0.02 255);line-height:1.9">
+        <div>{{ today }}</div>
+        <div>REF · {{ ref }}</div>
+        <div style="color:oklch(0.70 0.24 350)">COMMERCIAL IN CONFIDENCE</div>
+      </div>
+    </div>
+
+    <!-- executive summary -->
+    <div style="display:flex;gap:30px;margin-top:34px;align-items:stretch">
+      <div style="flex:none;width:170px;background:#fff;border:1px solid oklch(0.88 0.01 255);border-radius:14px;padding:22px;text-align:center;display:flex;flex-direction:column;justify-content:center">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:oklch(0.55 0.02 255)">OPS MATURITY</div>
+        <div style="font-size:52px;font-weight:700;font-family:'JetBrains Mono',monospace;color:{{ scoreColor }};line-height:1.05;margin-top:6px">{{ score }}</div>
+        <div style="font-size:11px;color:oklch(0.55 0.02 255);font-family:'JetBrains Mono',monospace">/ 100</div>
+        <div style="font-size:12px;font-weight:600;color:{{ scoreColor }};margin-top:8px">{{ maturityBand }}</div>
+      </div>
+      <div style="flex:1">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.12em;color:oklch(0.55 0.02 255);margin-bottom:9px">EXECUTIVE SUMMARY</div>
+        <div style="font-size:14.5px;line-height:1.62;color:oklch(0.3 0.02 255)">{{ summary }}</div>
+        <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+          <span style="font-size:12px;font-weight:600;color:oklch(0.55 0.2 25);border:1px solid oklch(0.75 0.14 25);background:oklch(0.96 0.03 25);border-radius:20px;padding:4px 12px">{{ criticalCount }} critical</span>
+          <span style="font-size:12px;font-weight:600;color:oklch(0.52 0.11 75);border:1px solid oklch(0.8 0.1 85);background:oklch(0.97 0.04 90);border-radius:20px;padding:4px 12px">{{ warnCount }} warnings</span>
+          <span style="font-size:12px;font-weight:600;color:oklch(0.45 0.09 262);border:1px solid oklch(0.8 0.06 262);background:oklch(0.96 0.02 262);border-radius:20px;padding:4px 12px">{{ moduleCount }} modules proposed</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI cover note -->
+    <sc-if value="{{ hasCover }}" hint-placeholder-val="{{ false }}">
+    <div style="margin-top:30px;border:1px solid oklch(0.86 0.04 262);background:oklch(0.97 0.012 262);border-radius:12px;padding:22px 24px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:oklch(0.5 0.08 262)">AI-DRAFTED COVER NOTE · REVIEW BEFORE SENDING</div>
+      <div style="font-size:14px;line-height:1.7;color:oklch(0.28 0.03 262);margin-top:11px;white-space:pre-wrap">{{ cover }}</div>
+    </div>
+    </sc-if>
+
+    <!-- current state -->
+    <div style="margin-top:40px">
+      <div style="font-family:'IBM Plex Serif',serif;font-size:19px;font-weight:600;border-bottom:1px solid oklch(0.88 0.01 255);padding-bottom:8px">1 · Current State</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:2px;margin-top:16px;background:oklch(0.9 0.01 255);border:1px solid oklch(0.9 0.01 255);border-radius:10px;overflow:hidden">
+        <sc-for list="{{ facts }}" as="f" hint-placeholder-count="6">
+          <div style="background:#fff;padding:13px 15px"><div style="font-size:10.5px;letter-spacing:.06em;color:oklch(0.58 0.02 255);font-family:'JetBrains Mono',monospace;text-transform:uppercase">{{ f.k }}</div><div style="font-size:14px;font-weight:600;margin-top:4px;color:oklch(0.28 0.02 255)">{{ f.v }}</div></div>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- business health -->
+    <div style="margin-top:38px">
+      <div style="font-family:'IBM Plex Serif',serif;font-size:19px;font-weight:600;border-bottom:1px solid oklch(0.88 0.01 255);padding-bottom:8px">2 · Business Health by Domain</div>
+      <div style="margin-top:16px;display:flex;flex-direction:column;gap:14px">
+        <sc-for list="{{ domains }}" as="d" hint-placeholder-count="5">
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px"><span style="font-size:13.5px;font-weight:600">{{ d.name }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:{{ d.color }}">{{ d.score }}<span style="color:oklch(0.6 0.02 255);font-weight:400">/100 · {{ d.band }}</span></span></div>
+            <div style="height:8px;border-radius:5px;background:oklch(0.9 0.01 255);overflow:hidden"><div style="height:100%;width:{{ d.pct }};background:{{ d.color }}"></div></div>
+            <div style="font-size:12px;color:oklch(0.5 0.02 255);margin-top:5px;line-height:1.45">{{ d.note }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- issue register -->
+    <div style="margin-top:38px" class="page-break">
+      <div style="font-family:'IBM Plex Serif',serif;font-size:19px;font-weight:600;border-bottom:1px solid oklch(0.88 0.01 255);padding-bottom:8px">3 · Issue Register</div>
+      <sc-if value="{{ noIssues }}" hint-placeholder-val="{{ false }}"><div style="font-size:13.5px;color:oklch(0.45 0.6 145);margin-top:14px">No structural risks were identified from the information provided.</div></sc-if>
+      <div style="margin-top:16px;display:flex;flex-direction:column;gap:11px">
+        <sc-for list="{{ issues }}" as="i" hint-placeholder-count="4">
+          <div style="border:1px solid oklch(0.88 0.01 255);border-left:4px solid {{ i.color }};border-radius:8px;padding:14px 17px;background:#fff">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px"><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;color:{{ i.color }};border:1px solid {{ i.color }};padding:2px 7px;border-radius:5px">{{ i.priority }}</span><span style="font-size:14px;font-weight:600">{{ i.title }}</span></div>
+            <div style="font-size:12.5px;color:oklch(0.42 0.02 255);line-height:1.55">{{ i.detail }}</div>
+            <div style="font-size:11.5px;color:oklch(0.55 0.02 255);margin-top:6px"><strong style="color:oklch(0.42 0.02 255)">Impact:</strong> {{ i.impact }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- roadmap -->
+    <div style="margin-top:38px">
+      <div style="font-family:'IBM Plex Serif',serif;font-size:19px;font-weight:600;border-bottom:1px solid oklch(0.88 0.01 255);padding-bottom:8px">4 · Recommended Build &amp; Roadmap</div>
+      <div style="margin-top:16px;display:flex;flex-direction:column;gap:18px">
+        <sc-for list="{{ phases }}" as="p" hint-placeholder-count="3">
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px"><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:.08em;color:#fff;background:{{ p.color }};padding:3px 11px;border-radius:20px">{{ p.when }}</span><span style="font-size:13px;color:oklch(0.5 0.02 255)">{{ p.horizon }}</span></div>
+            <div style="display:flex;flex-direction:column;gap:7px;padding-left:4px">
+              <sc-for list="{{ p.items }}" as="m" hint-placeholder-count="2">
+                <div style="display:flex;gap:11px;align-items:flex-start"><span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:{{ p.color }};border:1px solid {{ p.color }};padding:2px 7px;border-radius:5px;flex:none;margin-top:1px">{{ m.phase }}</span><div><span style="font-size:13.5px;font-weight:600">{{ m.title }}</span><span style="font-size:12.5px;color:oklch(0.48 0.02 255)"> — {{ m.detail }}</span></div></div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- next steps -->
+    <div style="margin-top:40px;background:oklch(0.96 0.015 262);border:1px solid oklch(0.86 0.04 262);border-radius:12px;padding:24px 26px">
+      <div style="font-family:'IBM Plex Serif',serif;font-size:17px;font-weight:600">5 · Next Steps</div>
+      <div style="font-size:13.5px;line-height:1.6;color:oklch(0.35 0.03 262);margin-top:10px">{{ nextSteps }}</div>
+      <div style="font-size:11.5px;color:oklch(0.5 0.02 262);margin-top:16px;font-family:'JetBrains Mono',monospace">OPSDECK ADVISORY · Operations systems for mobile hospitality · This document is generated from the diagnostic on record and updates as new information is captured.</div>
+    </div>
+
+  </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    const data=this.load();
+    const names=Object.keys(data);
+    let picked=null;
+    try{ const h=decodeURIComponent((location.hash||'').replace(/^#client=/,'')); if(h&&data[h]) picked=h; }catch(e){}
+    if(!picked&&names.length) picked=names[0];
+    this.state={data,picked,cover:'',coverLoading:false};
+  }
+  load(){ try{ return (window.OPSDATA&&window.OPSDATA.kvGet('diagnostics'))||{}; }catch(e){ return {}; } }
+  answered(v){ return Array.isArray(v)?v.length>0:!!(v&&String(v).trim()); }
+
+  findings(a){
+    const F=[]; const add=(sev,title,detail,impact)=>F.push({sev,title,detail,impact});
+    if(a.records==='Paper folder'||a.records==='Someone\u2019s head') add('danger','Unit records not centralised','Compliance and service history live in '+String(a.records).toLowerCase()+', so expiry dates are invisible until something fails.','A unit can be turned away at the gate mid-event.');
+    if((a.docs_tracked||[]).includes('None tracked centrally')) add('danger','No central compliance register','Gas, PAT and insurance expiries are untracked across the fleet.','Legal and safety exposure on every trading day.');
+    if(a.insurance_renewals==='Someone\u2019s diary / memory'||a.insurance_renewals==='Not tracked') add('danger','Renewals untracked','Insurance and certificate renewals rely on memory.','One lapse can void cover mid-season.');
+    if(a.rtw==='No'||a.rtw==='Partially') add('danger','Unverified right-to-work / hygiene','Clearances are not consistently recorded before staff are deployed.','Fines and reputational damage; blocked from major sites.');
+    if(a.scheduling==='WhatsApp / texts'||a.scheduling==='Phone calls') add('warn','Scheduling by message','There is no structural record of who is where.','Clashes are found on the day, not at booking.');
+    if(a.double_booking==='Often'||a.double_booking==='Sometimes') add('danger','Double-bookings already occurring','Staff or units are being committed to overlapping events.','Missed shifts, scramble cover, unhappy organisers.');
+    if(a.double_booking==='Don\u2019t know') add('warn','No visibility of clashes','There is no way to confirm whether double-bookings happen.','Silent failures until a unit or person is missing.');
+    if(a.payroll==='Manual from memory / notes') add('warn','Manual payroll','Hours are re-keyed by hand each pay run.','Errors plus days of avoidable admin.');
+    if(a.payroll_time==='A day or more') add('warn','Payroll drag','A full day per pay run is spent on admin.','Owner/office time lost that could go to growth.');
+    if(a.profit_visibility==='No'||a.profit_visibility==='Roughly') add('warn','No profit per event','Profitability is not measured per event.','Loss-making events are repeated unknowingly.');
+    if(a.reconciliation==='No'||a.reconciliation==='Sometimes') add('warn','Takings not reconciled','Per-unit daily takings are not reconciled.','Shrinkage and cash/card gaps go unseen.');
+    if(a.late_payments==='Often') add('warn','Cash-flow risk','Client payments are chased informally.','Unpredictable cash flow and wasted admin.');
+    if(a.key_person==='Owner does everything') add('danger','Single point of failure','The entire operation routes through the owner.','Illness or one busy weekend stalls everything.');
+    if(a.breakdowns==='Often') add('warn','Reactive maintenance','Units fail during trade rather than being serviced between events.','Lost revenue and emergency repair costs.');
+    if(a.deadlines==='Regularly') add('danger','Organiser deadlines missed','RAMS, accreditation and trader packs are submitted late.','Risk of losing pitches at major events.');
+    if(a.deadlines==='Occasionally') add('warn','Deadline near-misses','Organiser paperwork is repeatedly caught late.','Last-minute scramble and organiser friction.');
+    if(a.no_shows==='Most events'||a.no_shows==='Some events') add('warn','Shift confirmation gap','Shifts are not positively confirmed by staff.','No-shows leave units understaffed.');
+    if(a.turnover==='Mostly new faces each year') add('warn','High seasonal turnover','The crew is rebuilt from scratch each season.','Repeated onboarding cost and quality dips.');
+    if(a.spreadsheet_reliance==='Everything runs on them') add('warn','Spreadsheet-dependent','The operation runs on interlinked spreadsheets.','One broken formula can take out the whole system.');
+    if((a.current_software||[]).includes('None / paper')) add('warn','No software backbone','Operations run on paper.','Greenfield build — fast, visible early wins.');
+    if(a.connectivity==='Often no signal on-site') add('warn','Patchy on-site connectivity','Sites regularly lose mobile signal.','Any tool must work offline and sync later.');
+    if(a.tool_appetite==='Resistant') add('warn','Change resistance','The team is wary of adopting new systems.','Rollout must be phased around one clear win.');
+
+    const mods=[{phase:'CORE',title:'Events · Units · Staff',detail:'the relational spine every client starts on'}];
+    const p=a.pains||[];
+    if(p.includes('Double bookings')||p.includes('Chasing staff availability')||a.double_booking==='Often'||a.double_booking==='Sometimes'||a.double_booking==='Don\u2019t know') mods.push({phase:'S4',title:'Allocation & conflict engine',detail:'catches staff and unit clashes at booking time'});
+    if(p.includes('Payroll takes days')||p.includes('No profit view per event')||(a.profit_visibility&&a.profit_visibility!=='Yes, per event')) mods.push({phase:'S5',title:'Costing & payroll',detail:'hours to gross pay to profit per event, no re-keying'});
+    if(p.includes('Compliance docs expire unnoticed')||(a.docs_tracked||[]).includes('None tracked centrally')||a.breakdowns==='Often'||a.insurance_renewals==='Not tracked'||a.insurance_renewals==='Someone\u2019s diary / memory') mods.push({phase:'P2',title:'Assets & compliance',detail:'cert register with expiry alerts and maintenance log'});
+    if(p.includes('Stock ordering chaos')) mods.push({phase:'P3',title:'Stock & purchasing',detail:'per-unit requirements, suppliers and purchase orders'});
+    if(p.includes('Onboarding paperwork')||a.turnover==='Mostly new faces each year'||a.no_shows==='Most events'||a.no_shows==='Some events') mods.push({phase:'P4',title:'People & safety',detail:'digital onboarding, shift confirmations, training and RAMS'});
+    if(p.includes('Client comms scattered')||a.late_payments==='Often'||a.invoicing==='Word / PDF by hand'||a.invoicing==='Rarely formalised') mods.push({phase:'P5',title:'Commercial / CRM',detail:'client database, quoting and invoicing with due-date tracking'});
+
+    let score=100; F.forEach(f=>{ score-=f.sev==='danger'?16:8; }); score=Math.max(score,15);
+    return {F,mods,score};
+  }
+
+  domainScores(a){
+    const clamp=v=>Math.max(15,Math.min(100,v));
+    const band=s=>s>=75?'Strong':s>=50?'Developing':'At risk';
+    const col=s=>s>=75?'oklch(0.55 0.14 150)':s>=50?'oklch(0.62 0.12 75)':'oklch(0.55 0.2 25)';
+    const D=[];
+    let c=100; if((a.docs_tracked||[]).includes('None tracked centrally'))c-=30; if(a.insurance_renewals==='Not tracked')c-=30;else if(a.insurance_renewals==='Someone\u2019s diary / memory')c-=18; if(a.records==='Paper folder'||a.records==='Someone\u2019s head')c-=18; if(a.breakdowns==='Often')c-=10; c=clamp(c);
+    D.push({name:'Compliance & Risk',score:c,note:c>=75?'Documentation is tracked and current.':'Compliance is tracked informally — the highest-priority fix.'});
+    let s2=100; if(a.scheduling==='WhatsApp / texts'||a.scheduling==='Phone calls')s2-=25; if(a.double_booking==='Often')s2-=30;else if(a.double_booking==='Sometimes')s2-=20;else if(a.double_booking==='Don\u2019t know')s2-=12; if(a.no_shows==='Most events')s2-=15;else if(a.no_shows==='Some events')s2-=8; s2=clamp(s2);
+    D.push({name:'Scheduling & Allocation',score:s2,note:s2>=75?'Bookings are managed with good visibility.':'Scheduling is manual and clash-prone.'});
+    let f=100; if(a.profit_visibility==='No')f-=25;else if(a.profit_visibility==='Roughly')f-=15; if(a.payroll==='Manual from memory / notes')f-=20; if(a.payroll_time==='A day or more')f-=12; if(a.reconciliation==='No')f-=18;else if(a.reconciliation==='Sometimes')f-=10; if(a.late_payments==='Often')f-=12; f=clamp(f);
+    D.push({name:'Finance & Payroll',score:f,note:f>=75?'Costs and payroll are well controlled.':'Financial visibility is limited and payroll is manual.'});
+    let pp=100; if(a.rtw==='No')pp-=30;else if(a.rtw==='Partially')pp-=18; if(a.turnover==='Mostly new faces each year')pp-=18; if(a.key_person==='Owner does everything')pp-=20;else if(a.key_person==='Shared informally')pp-=10; pp=clamp(pp);
+    D.push({name:'People & Staffing',score:pp,note:pp>=75?'Crew is stable and clearances recorded.':'Clearances and continuity need shoring up.'});
+    let t=100; if((a.current_software||[]).includes('None / paper'))t-=25; if(a.spreadsheet_reliance==='Everything runs on them')t-=20; if(a.connectivity==='Often no signal on-site')t-=15;else if(a.connectivity==='Patchy')t-=8; if(a.tool_appetite==='Resistant')t-=10; t=clamp(t);
+    D.push({name:'Technology & Data',score:t,note:t>=75?'A workable digital backbone is in place.':'Little structured software — mostly paper and spreadsheets.'});
+    return D.map(d=>Object.assign(d,{band:band(d.score),color:col(d.score),pct:d.score+'%'}));
+  }
+
+  async draftCover(){
+    const picked=this.state.picked; const a=(picked&&this.state.data[picked])||{};
+    if(!picked) return;
+    this.setState({coverLoading:true,cover:''});
+    const {F,mods,score}=this.findings(a);
+    const crit=F.filter(f=>f.sev==='danger').map(f=>f.title);
+    const prompt=`Write a warm but professional cover note (3 short paragraphs, first person "we", addressed to the client) to accompany an operations consulting proposal for "${picked}", a UK mobile hospitality operator (${a.operator_type||'mobile hospitality'}).\n\nContext: our diagnostic scored their operation ${score}/100. Key critical issues: ${crit.length?crit.join('; '):'none critical, mainly efficiency gains'}. We are proposing ${mods.length} modules starting with the operational core.\n${a.success_metric?'They defined success as: "'+a.success_metric+'".':''}\n\nOpen by acknowledging their operation, summarise what we found without alarming them, and close by inviting a short call to walk through the proposal. Keep it under 160 words. Do not use placeholders like [name].`;
+    try{
+      if(!window.claude||!window.claude.complete) throw new Error('unavailable');
+      const text=await window.claude.complete({system:'You are a senior operations consultant for mobile hospitality businesses. Write persuasive, credible, concise client communications. British English.',messages:[{role:'user',content:prompt}]});
+      this.setState({cover:(text||'').trim()||'No response returned.',coverLoading:false});
+    }catch(e){
+      this.setState({cover:'The AI cover-note drafter runs in the live prototype. Meanwhile, use the Executive Summary below as your cover text, or draft three short paragraphs: (1) acknowledge '+picked+'\u2019s operation, (2) summarise the '+F.length+' issues found and the maturity score, (3) invite a short call to walk through the proposal.',coverLoading:false});
+    }
+  }
+
+  renderVals(){
+    const data=this.state.data, names=Object.keys(data);
+    const isEmpty=names.length===0;
+    const picked=this.state.picked;
+    const a=(picked&&data[picked])||{};
+    const options=names.map(n=>({v:n,label:n}));
+
+    const {F,mods,score}=this.findings(a);
+    const crit=F.filter(f=>f.sev==='danger');
+    const scoreColor=score>=75?'oklch(0.5 0.14 150)':score>=50?'oklch(0.58 0.12 75)':'oklch(0.55 0.2 25)';
+    const maturityBand=score>=75?'Well run':score>=50?'Typical operator':'High risk';
+
+    const nm=picked||'the client';
+    const summary=isEmpty?'':`${nm} operates as a ${(a.operator_type||'mobile hospitality').toLowerCase()} business${a.region?' across '+a.region:''}. This diagnostic scores their operation at ${score}/100 (${maturityBand.toLowerCase()}), with ${crit.length} critical issue${crit.length===1?'':'s'} and ${F.length-crit.length} warning${(F.length-crit.length)===1?'':'s'} identified. ${crit.length?'The engagement should lead with the critical risks below — chiefly '+crit[0].title.toLowerCase()+'.':'No critical risks were found; the opportunity is to consolidate and automate for efficiency.'} OPSDECK proposes a phased build starting with the relational core and prioritising the modules that address the issues on record.`;
+
+    const factDefs=[['Operation',a.operator_type],['Region',a.region],['Years trading',a.years],['Trading pattern',a.season],['Fleet size',a.unit_count?a.unit_count+' units':null],['Peak headcount',a.headcount],['Events / season',a.events_count],['Runs day-to-day',a.key_person]];
+    const facts=factDefs.filter(([,v])=>this.answered(v)).map(([k,v])=>({k,v:String(v)}));
+
+    const domains=this.domainScores(a);
+
+    const prMap={danger:{priority:'CRITICAL',color:'oklch(0.55 0.2 25)'},warn:{priority:'MEDIUM',color:'oklch(0.58 0.12 75)'}};
+    const issues=F.map(f=>({title:f.title,detail:f.detail,impact:f.impact,priority:prMap[f.sev].priority,color:prMap[f.sev].color}));
+
+    const col=ph=>ph==='CORE'?'oklch(0.5 0.14 150)':ph[0]==='S'?'oklch(0.5 0.13 220)':'oklch(0.5 0.12 262)';
+    const withCol=arr=>arr.map(m=>Object.assign({},m,{color:col(m.phase)}));
+    const imm=mods.filter(m=>m.phase==='CORE');
+    const shortP=mods.filter(m=>m.phase==='S4'||m.phase==='S5');
+    const med=mods.filter(m=>m.phase==='P2'||m.phase==='P3');
+    const longP=mods.filter(m=>m.phase==='P4'||m.phase==='P5');
+    const phases=[];
+    const pc={imm:'oklch(0.5 0.14 150)',short:'oklch(0.5 0.13 220)',med:'oklch(0.5 0.12 262)',long:'oklch(0.5 0.05 262)'};
+    if(imm.length) phases.push({when:'IMMEDIATE',horizon:'Weeks 1–4 · foundation',color:pc.imm,items:withCol(imm)});
+    if(shortP.length) phases.push({when:'SHORT TERM',horizon:'Month 1–2 · core operations',color:pc.short,items:withCol(shortP)});
+    if(med.length) phases.push({when:'MEDIUM TERM',horizon:'Quarter · risk & control',color:pc.med,items:withCol(med)});
+    if(longP.length) phases.push({when:'LONG TERM',horizon:'Next season · scale',color:pc.long,items:withCol(longP)});
+
+    const nextSteps=`We recommend a 45-minute review of this proposal with ${nm}, confirming the priority order and agreeing the scope of the first (foundation) phase. On sign-off, OPSDECK stands up the relational core and the highest-priority module within the first build cycle, with a follow-up diagnostic to measure movement in the domain scores above.`;
+
+    const d=new Date();
+    const today=d.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+    const ref=picked?('OD-'+picked.replace(/[^A-Za-z0-9]/g,'').slice(0,6).toUpperCase()+'-'+(d.getMonth()+1)+d.getFullYear()):'OD-—';
+
+    return {isEmpty,hasClient:!isEmpty,options,picked,clientName:nm,
+      onPick:(e)=>{ this.setState({picked:e.target.value,cover:''}); },
+      onPrint:()=>{ try{ window.print(); }catch(e){} },
+      onDraft:()=>this.draftCover(),
+      draftLabel:this.state.coverLoading?'Drafting…':'AI cover note',
+      draftBtn:`padding:9px 15px;border-radius:8px;border:1px solid oklch(0.55 0.13 220);background:transparent;color:oklch(0.75 0.1 210);font-size:13px;font-weight:600;cursor:${this.state.coverLoading?'default':'pointer'};font-family:inherit`,
+      cover:this.state.cover,hasCover:!!this.state.cover,
+      score,scoreColor,maturityBand,summary,
+      criticalCount:crit.length,warnCount:F.length-crit.length,moduleCount:mods.length,
+      facts,domains,issues,noIssues:F.length===0,phases,nextSteps,today,ref};
+  }
+}
+</script>
+</body>
+</html>
