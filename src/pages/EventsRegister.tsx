@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useOpsData } from '../data/useOpsData';
 import { registerRows } from '../data/phase4';
+import { unitColor } from '../components/console/unitTheme';
+import type { EventRec } from '../data/types';
 
 type Scope = 'all' | 'upcoming' | 'live' | 'past';
 const SCOPES: Scope[] = ['all', 'upcoming', 'live', 'past'];
@@ -64,29 +66,55 @@ export default function EventsRegister() {
       {rows.length === 0 ? (
         <div className="empty-state">No {scope === 'all' ? '' : scope} events.</div>
       ) : (
-        rows.map((r) => (
-          <a
-            key={r.id}
-            className="reg-row"
-            href={`#/event/${r.id}`}
-            style={{ ['--evc' as string]: r.color }}
-          >
-            <span className="reg-accent" />
-            <div className="reg-main">
-              <div className="nm">{r.name}</div>
-              <div className="sub">{r.clientName} · {r.loc || '—'} · {fmt(r.start)}{r.end && r.end !== r.start ? `–${fmt(r.end)}` : ''}</div>
-            </div>
-            <div className="reg-stats">
-              <div><span className="k">Units</span>{r.units}</div>
-              <div><span className="k">Crew</span>{r.filled}/{r.need}</div>
-              <div><span className="k">Conf</span>{r.confirmed}</div>
-              <div style={{ color: r.stockLow > 0 ? 'var(--amber)' : 'var(--green)' }}>
-                <span className="k">Stock</span>{r.stockLow > 0 ? `${r.stockLow} low` : 'ok'}
+        <>
+          {rows.filter((r) => r.status !== 'past' || scope === 'past').map((r) => {
+            const ev = data.get<EventRec>('events', r.id);
+            const types = ev ? data.unitsForEvent(ev).map((u) => u.type) : [];
+            const staffPct = r.need ? Math.min(100, Math.round((r.filled / r.need) * 100)) : 0;
+            const crewed = r.need > 0 && r.filled >= r.need;
+            return (
+              <div key={r.id} className="reg-row" style={{ ['--evc' as string]: r.color }}>
+                <span className="reg-accent" />
+                <div className="reg-main">
+                  <div className="nm">
+                    <a href={`#/event/${r.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>{r.name}</a>
+                    <span className="reg-dots" aria-label={`${types.length} units on site`}>
+                      {types.map((t, i) => (
+                        <span className="reg-dot" key={i} style={{ background: unitColor(t), boxShadow: `0 0 6px ${unitColor(t)}` }} title={t} />
+                      ))}
+                    </span>
+                  </div>
+                  <div className="sub">{r.clientName} · {r.loc || '—'} · {fmt(r.start)}{r.end && r.end !== r.start ? `–${fmt(r.end)}` : ''}</div>
+                  <div className="reg-staffbar" data-ok={crewed}>
+                    <span className="bar"><span style={{ width: `${staffPct}%` }} /></span>
+                    <span className="mono">{r.filled}/{r.need} crew · {r.confirmed} confirmed{r.stockLow ? ` · ${r.stockLow} stock low` : ''}</span>
+                  </div>
+                  <div className="reg-actions">
+                    <a className="btn btn-primary btn-sm" href={`#/event/${r.id}`} style={{ textDecoration: 'none' }}>Open data pack</a>
+                    <a className="btn btn-sm" href="#/callouts" style={{ textDecoration: 'none' }}>Callout crew</a>
+                    <a className="btn btn-ghost btn-sm" href={`#/console/${r.clientId}`} style={{ textDecoration: 'none' }}>Edit</a>
+                  </div>
+                </div>
+                <span className="reg-badge" data-status={r.status}>{r.status === 'live' ? '● LIVE' : r.status === 'past' ? 'DONE' : r.countdownLabel}</span>
               </div>
-            </div>
-            <span className="reg-badge" data-status={r.status}>{r.countdownLabel}</span>
-          </a>
-        ))
+            );
+          })}
+
+          {/* past events collapse into a slim archive */}
+          {scope === 'all' && rows.some((r) => r.status === 'past') && (
+            <details className="reg-archive">
+              <summary>Archive · {rows.filter((r) => r.status === 'past').length} past event{rows.filter((r) => r.status === 'past').length !== 1 ? 's' : ''}</summary>
+              {rows.filter((r) => r.status === 'past').map((r) => (
+                <a key={r.id} className="reg-arch-row" href={`#/event/${r.id}`} style={{ ['--evc' as string]: r.color }}>
+                  <span className="reg-arch-dot" />
+                  <span className="reg-arch-name">{r.name}</span>
+                  <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>{fmt(r.start)}</span>
+                  <span className="reg-badge" data-status="past">DONE</span>
+                </a>
+              ))}
+            </details>
+          )}
+        </>
       )}
     </div>
   );

@@ -652,7 +652,7 @@ export class OpsData {
      ============================================================ */
 
   certsForStaff(sid: string): Cert[] {
-    return Object.values(this.db.certs).filter((c) => c.staffId === sid);
+    return Object.values(this.db.certs || {}).filter((c) => c.staffId === sid);
   }
 
   /** Upsert a cert for a staff member. */
@@ -678,7 +678,7 @@ export class OpsData {
   }
 
   availabilityForStaff(sid: string): AvailabilityDay[] {
-    return Object.values(this.db.availability).filter((a) => a.staffId === sid);
+    return Object.values(this.db.availability || {}).filter((a) => a.staffId === sid);
   }
 
   isUnavailable(sid: string, dateISO: string): boolean {
@@ -842,7 +842,7 @@ export class OpsData {
      ============================================================ */
 
   movementsForEvent(eventId: string): Movement[] {
-    return Object.values(this.db.movements).filter((m) => m.eventId === eventId);
+    return Object.values(this.db.movements || {}).filter((m) => m.eventId === eventId);
   }
 
   private async saveMovementRow(m: Partial<Movement> & { id?: string }): Promise<Movement> {
@@ -940,14 +940,14 @@ export class OpsData {
      ============================================================ */
 
   tasksForEvent(eventId: string): EventTask[] {
-    return Object.values(this.db.eventTasks).filter((t) => t.eventId === eventId);
+    return Object.values(this.db.eventTasks || {}).filter((t) => t.eventId === eventId);
   }
 
   /** Every task across a client's events, each annotated with its event. */
   tasksForClient(clientId: string): (EventTask & { eventName: string; eventStart?: string })[] {
     const eventIds = new Set(this.eventsForClient(clientId).map((e) => e.id));
     const byId = new Map(this.eventsForClient(clientId).map((e) => [e.id, e]));
-    return Object.values(this.db.eventTasks)
+    return Object.values(this.db.eventTasks || {})
       .filter((t) => eventIds.has(t.eventId))
       .map((t) => ({ ...t, eventName: byId.get(t.eventId)?.name ?? '', eventStart: byId.get(t.eventId)?.start }));
   }

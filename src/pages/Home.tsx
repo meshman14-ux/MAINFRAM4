@@ -188,23 +188,26 @@ export default function Home() {
   );
 }
 
+/* Status tiles — each deep-links to the page already filtered to the
+   state the tile counts (sketch notes §1). */
 function KpiRow({ kpis }: { kpis: ReturnType<typeof homeKpis> }) {
-  const tiles: { label: string; value: number | string; sub: string; color?: string }[] = [
-    { label: 'Operators', value: kpis.operators, sub: 'entities on system' },
-    { label: 'Events ahead', value: kpis.eventsAhead, sub: 'all operators', color: 'var(--blue)' },
-    { label: 'Crew gaps', value: kpis.crewGaps, sub: 'positions unfilled', color: 'var(--violet)' },
-    { label: 'Unconfirmed', value: kpis.unconfirmed, sub: 'shifts not confirmed', color: 'var(--amber)' },
-    { label: 'Stock low', value: kpis.stockLow, sub: 'lines below par', color: 'var(--pink)' },
+  const tiles: { label: string; value: number | string; sub: string; href: string; color?: string }[] = [
+    { label: 'Operators', value: kpis.operators, sub: 'entities on system', href: '#/accounts' },
+    { label: 'Events ahead', value: kpis.eventsAhead, sub: 'all operators', href: '#/events', color: 'var(--blue)' },
+    { label: 'Crew confirmation', value: kpis.crewGaps + kpis.unconfirmed, sub: `${kpis.crewGaps} unfilled · ${kpis.unconfirmed} unconfirmed`, href: '#/callouts', color: 'var(--violet)' },
+    { label: 'Stock low', value: kpis.stockLow, sub: 'lines below par', href: '#/stock', color: 'var(--pink)' },
+    { label: 'Compliance alerts', value: kpis.complianceAlerts, sub: 'crew items + required checks', href: '#/compliance', color: 'var(--amber)' },
+    { label: 'Event readiness', value: kpis.blockedEvents, sub: 'events hard-gated', href: '#/readiness', color: kpis.blockedEvents ? 'var(--red)' : 'var(--green)' },
   ];
   return (
     <div className="page" style={{ paddingBottom: 0 }}>
       <div className="kpis">
         {tiles.map((t) => (
-          <div className="kpi" key={t.label}>
+          <a className="kpi" key={t.label} href={t.href} style={{ textDecoration: 'none', color: 'inherit' }}>
             <div className="label">{t.label}</div>
             <div className="value" style={{ color: t.color }}>{t.value}</div>
             <div className="sub">{t.sub}</div>
-          </div>
+          </a>
         ))}
       </div>
     </div>

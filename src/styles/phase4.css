@@ -30,8 +30,39 @@
   background: color-mix(in oklch, currentColor 15%, transparent);
   box-shadow: var(--glow-sm) color-mix(in oklch, currentColor 55%, transparent);
 }
-.reg-badge[data-status="live"] { color: var(--neon-green); }
+.reg-badge[data-status="live"] {
+  color: var(--neon-green);
+  animation: pulse-glow 2.4s ease-in-out infinite;
+  --pulse-c: color-mix(in oklch, var(--neon-green) 55%, transparent);
+}
 .reg-badge[data-status="past"] { color: var(--ink-3); box-shadow: none; }
+
+/* friendlier register cards (sketch notes §3) */
+.reg-row { grid-template-columns: 6px 1fr auto; }
+.reg-dots { display: inline-flex; gap: 5px; margin-left: 10px; vertical-align: middle; }
+.reg-dot { width: 9px; height: 9px; border-radius: 50%; }
+.reg-staffbar { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.reg-staffbar .bar { flex: 1; max-width: 260px; height: 6px; border-radius: 3px; background: var(--inset); overflow: hidden; }
+.reg-staffbar .bar > span { display: block; height: 100%; background: var(--amber); box-shadow: 0 0 8px var(--amber); transition: width 0.3s; }
+.reg-staffbar[data-ok="true"] .bar > span { background: var(--neon-green); box-shadow: 0 0 8px var(--neon-green); }
+.reg-staffbar .mono { font-size: 11px; color: var(--ink-3); }
+.reg-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+/* slim archive for past events */
+.reg-archive { margin-top: 16px; }
+.reg-archive summary {
+  cursor: pointer; font-family: var(--font-mono); font-size: 11.5px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3);
+  padding: 8px 4px;
+}
+.reg-arch-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  border-radius: var(--r-sm); text-decoration: none; color: inherit;
+  border-bottom: 1px solid var(--panel-line);
+}
+.reg-arch-row:hover { background: var(--panel-2); }
+.reg-arch-dot { width: 8px; height: 8px; border-radius: 2px; background: var(--evc); opacity: 0.7; }
+.reg-arch-name { flex: 1; font-size: 13.5px; color: var(--ink-2); }
 
 /* calendar */
 .cal-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }

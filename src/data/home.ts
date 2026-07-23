@@ -7,7 +7,8 @@
    store so they're unit-testable and reusable by other modules.
    ============================================================ */
 import type { OpsData } from './opsData';
-import type { EventRec, Area } from './types';
+import type { EventRec, Area, Client } from './types';
+import { complianceRollup, prepPanel } from './phase13';
 
 const AREAS: Area[] = ['Bar', 'Coffee', 'Food', 'General', 'Driver', 'Supervisor'];
 
@@ -17,6 +18,8 @@ export interface HomeKpis {
   crewGaps: number;       // total unfilled slots across upcoming events
   unconfirmed: number;    // assigned-but-not-confirmed across upcoming events
   stockLow: number;       // stock lines below par across upcoming events
+  complianceAlerts: number; // crew items + required unit checks open (all operators)
+  blockedEvents: number;    // upcoming events hard-gated on required compliance
 }
 
 export interface EventStaffing {
@@ -109,12 +112,19 @@ export function homeKpis(d: OpsData, today = todayISO()): HomeKpis {
     unconfirmed += s.filled - s.confirmed;
     stockLow += eventStockLow(d, e);
   });
+  const complianceAlerts = d.all<Client>('clients').reduce((n, c) => {
+    const r = complianceRollup(d, c.id);
+    return n + r.crewProblems + r.unitRequiredOpen;
+  }, 0);
+  const blockedEvents = events.filter((e) => prepPanel(d, e).blocked).length;
   return {
     operators: d.all('clients').length,
     eventsAhead: events.length,
     crewGaps,
     unconfirmed,
     stockLow,
+    complianceAlerts,
+    blockedEvents,
   };
 }
 
