@@ -27,29 +27,46 @@ const DETAIL_FIELDS: { key: keyof UnitDetail; label: string; hint: string }[] = 
 
 const CATS: ChecklistItem['cat'][] = ['Equipment', 'Safety', 'Consumables', 'Documentation', 'Tools'];
 
-/* Starter checklist per unit type — seeded on demand, then fully editable. */
+/* Starter checklist per unit type — seeded on demand, then fully editable.
+   Each row: [category, item, description, how-to-comply, required?].
+   Safety/Documentation items marked required feed the compliance rollup
+   (and later the readiness hard gate). */
+type SeedRow = [ChecklistItem['cat'], string, string, string, boolean?];
 function defaultChecklistFor(type: string): ChecklistItem[] {
-  const rows: [ChecklistItem['cat'], string][] =
+  const rows: SeedRow[] =
     type === 'Bar' ? [
-      ['Equipment', 'Taps & lines cleaned'], ['Equipment', 'Glass washer working'],
-      ['Consumables', 'CO₂ / gas connected'], ['Safety', 'Fire extinguisher in date'],
-      ['Documentation', 'Personal licence on file'], ['Tools', 'Bar keys packed'],
+      ['Equipment', 'Taps & lines cleaned', 'Beer lines flushed since last event.', 'Run line cleaner through all taps, then rinse until clear.'],
+      ['Equipment', 'Glass washer working', 'Washer heats and cycles.', 'Run one empty cycle on site power before service.'],
+      ['Consumables', 'CO₂ / gas connected', 'Gas bottles fitted and leak-free.', 'Check regulator seals with leak spray; carry a spare bottle.'],
+      ['Safety', 'Fire extinguisher in date', 'Service tag within 12 months.', 'Check the tag date; swap with a serviced unit if lapsed.', true],
+      ['Documentation', 'Personal licence on file', 'A personal licence holder is on the unit.', 'Keep a copy of the licence in the unit folder; note the holder per shift.', true],
+      ['Tools', 'Bar keys packed', 'Till, shutter and cellar keys with the unit.', 'Tape a labelled spare set inside the stock cupboard.'],
     ] : type === 'Coffee' ? [
-      ['Equipment', 'Machine serviced & descaled'], ['Equipment', 'Grinder dialled in'],
-      ['Consumables', 'Water containers filled'], ['Safety', 'LPG certificate in date'],
-      ['Documentation', 'Hygiene rating displayed'],
+      ['Equipment', 'Machine serviced & descaled', 'Espresso machine serviced this season.', 'Book service if >6 months; descale weekly on hard-water sites.'],
+      ['Equipment', 'Grinder dialled in', 'Grind set for the current beans.', 'Pull a test shot on arrival; adjust to 25–30s extraction.'],
+      ['Consumables', 'Water containers filled', 'Enough potable water for the day.', 'Fill at the potable point only; label containers DRINKING WATER.'],
+      ['Safety', 'LPG certificate in date', 'Gas Safe certificate current for the unit.', 'Annual check by a Gas Safe engineer; keep the cert in the unit folder.', true],
+      ['Documentation', 'Hygiene rating displayed', 'FHRS sticker visible to customers.', 'Display at the serving hatch; carry the paper certificate too.', true],
     ] : type === 'Food' || type === 'Catering' ? [
-      ['Equipment', 'Fridges holding temp'], ['Tools', 'Temp probe calibrated'],
-      ['Consumables', 'Probe wipes stocked'], ['Safety', 'Fire blanket present'],
-      ['Safety', 'First aid kit stocked'], ['Documentation', 'Allergen matrix printed'],
+      ['Equipment', 'Fridges holding temp', 'All fridges at or below 5°C.', 'Check after 1h on site power; log the reading in the temp sheet.', ],
+      ['Tools', 'Temp probe calibrated', 'Probe reads true.', 'Ice-water test (0°C ±1) monthly; note the date on the probe case.'],
+      ['Consumables', 'Probe wipes stocked', 'Wipes for between-use cleaning.', 'One pack per service day minimum.'],
+      ['Safety', 'Fire blanket present', 'Blanket mounted within reach of fryers.', 'Mount at exit side of the cooking area, not behind the fryer.', true],
+      ['Safety', 'First aid kit stocked', 'Kit complete incl. blue plasters.', 'Check contents against the lid list; restock burns gel.', true],
+      ['Documentation', 'Allergen matrix printed', 'Current menu allergen matrix on the unit.', 'Reprint whenever the menu changes; staff briefed on where it is.', true],
     ] : type === 'Cocktail' ? [
-      ['Equipment', 'Shakers & strainers packed'], ['Equipment', 'Ice wells sanitised'],
-      ['Consumables', 'Garnish prep done'], ['Documentation', 'Spirits licence on file'],
+      ['Equipment', 'Shakers & strainers packed', 'Full cocktail kit with the unit.', 'Pack list taped inside the kit box; count back at close.'],
+      ['Equipment', 'Ice wells sanitised', 'Wells cleaned before filling.', 'Sanitiser spray + rinse before first fill; scoop stored outside the well.'],
+      ['Consumables', 'Garnish prep done', 'Citrus and garnish prepped for service.', 'Prep in the morning; keep covered and chilled.'],
+      ['Documentation', 'Spirits licence on file', 'Licence covering spirit sales on this pitch.', 'Copy of the premises/TEN paperwork in the unit folder.', true],
     ] : [
-      ['Equipment', 'Generator fuelled'], ['Tools', 'Tool kit checked'],
-      ['Safety', 'Hi-vis & PPE packed'],
+      ['Equipment', 'Generator fuelled', 'Full tank + spare can.', 'Fill before leaving the yard; log run hours.'],
+      ['Tools', 'Tool kit checked', 'Standard kit complete.', 'Check against the lid list; replace anything borrowed.'],
+      ['Safety', 'Hi-vis & PPE packed', 'Hi-vis, gloves and boots for the crew.', 'One set per crew member plus two spares.', true],
     ];
-  return rows.map(([cat, item], i) => ({ id: `c-${type}-${i}`, cat, item, on: false }));
+  return rows.map(([cat, item, desc, how, required], i) => ({
+    id: `c-${type}-${i}`, cat, item, on: false, desc, how, ...(required ? { required: true } : {}),
+  }));
 }
 
 export function UnitsTab({ data, clientId }: Props) {
@@ -233,11 +250,17 @@ function UnitDetailsEditor({ data, unit, detail, onClose }: {
         <div key={g.cat} style={{ marginBottom: 10 }}>
           <div className="ev-label" style={{ marginBottom: 5 }}>{g.cat}</div>
           {g.items.map((c) => (
-            <div className="ud-item" key={c.id} data-on={c.on}>
+            <div className="ud-item" key={c.id} data-on={c.on} title={c.how ? `How to comply: ${c.how}` : undefined}>
               <button className="ud-tick" aria-label={`Toggle ${c.item}`} aria-pressed={c.on} onClick={() => toggle(c.id)}>
                 {c.on ? '✓' : ''}
               </button>
-              <span className="ud-label">{c.item}</span>
+              <span className="ud-label">
+                {c.item}
+                {c.required && <span className="chip chip-red" style={{ marginLeft: 8, fontSize: 9 }}>required</span>}
+                {(c.desc || c.how) && (
+                  <span className="ud-note">{c.desc}{c.how ? ` — ${c.how}` : ''}</span>
+                )}
+              </span>
               <button className="btn btn-ghost btn-sm" onClick={() => setChecklist(cl.filter((x) => x.id !== c.id))}>×</button>
             </div>
           ))}

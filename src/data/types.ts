@@ -58,6 +58,9 @@ export interface ChecklistItem {
   cat: 'Equipment' | 'Safety' | 'Consumables' | 'Documentation' | 'Tools';
   item: string;
   on: boolean;
+  desc?: string;   // what this check means
+  how?: string;    // how to comply — shown on expand
+  required?: boolean; // required items feed the readiness hard gate
 }
 
 export interface Unit {

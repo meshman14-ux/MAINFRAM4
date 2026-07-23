@@ -1,16 +1,19 @@
 import { useMemo, useState } from 'react';
 import { useOpsData } from '../data/useOpsData';
-import type { Client, DocumentRec, DocType, Unit } from '../data/types';
+import type { Client, DocumentRec, DocType, Unit, Staff } from '../data/types';
 import { DOC_TYPES } from '../data/types';
-import { complianceRegister, complianceSummary } from '../data/phase6';
+import { complianceSummary } from '../data/phase6';
 import { docState, generateResearch } from '../data/phase12';
+import { personalRag, unitCompliance, complianceRollup, type Rag } from '../data/phase13';
 import { unitColor } from '../components/console/unitTheme';
 
-/* Status hue per compliance state — drives each card's glow. */
-const STATUS_COLOR: Record<string, string> = {
-  compliant: 'var(--neon-green)',
-  expiring: 'var(--neon-yellow)',
-  blocked: 'var(--neon-pink)',
+/* RAG hue — drives each card's glow. */
+const RAG_COLOR: Record<Rag, string> = {
+  green: 'var(--neon-green)', amber: 'var(--neon-yellow)', red: 'var(--neon-pink)',
+};
+const RAG_CHIP: Record<Rag, string> = { green: 'chip-green', amber: 'chip-amber', red: 'chip-red' };
+const ITEM_CHIP: Record<string, string> = {
+  ok: 'chip-green', expiring: 'chip-amber', expired: 'chip-red', missing: 'chip-red',
 };
 
 export default function Compliance() {
@@ -24,8 +27,13 @@ export default function Compliance() {
   );
   const activeId = clientId || clients[0]?.id || '';
 
-  const rows = useMemo(
-    () => (activeId ? complianceRegister(data, activeId) : []),
+  const crew = useMemo(
+    () => (activeId ? data.staffForClient(activeId).map((s) => ({ staff: s, rag: personalRag(data, s) })) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeId, data.meta().updatedAt]
+  );
+  const unitsComp = useMemo(
+    () => (activeId ? data.unitsForClient(activeId).map(unitCompliance) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeId, data.meta().updatedAt]
   );
@@ -68,37 +76,124 @@ export default function Compliance() {
         </div>
       )}
 
-      {rows.length === 0 ? (
+      {/* Level 1 — per-unit operational compliance */}
+      <div className="toolbar" style={{ marginTop: 6 }}>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 17 }}>Unit compliance (operational)</h2>
+      </div>
+      {unitsComp.length === 0 ? (
+        <div className="empty-state">No units for this operator.</div>
+      ) : (
+        <div className="unit-grid" style={{ marginBottom: 24 }}>
+          {unitsComp.map(({ unit, total, done, requiredOpen, rag, open }) => (
+            <div className="unit-card" key={unit.id} style={{ ['--uc' as string]: unitColor(unit.type) }}>
+              <div className="ev-head">
+                <span className="ev-swatch" style={{ color: unitColor(unit.type) }} />
+                <span className="unit-name" style={{ marginTop: 0, fontSize: 15 }}>{unit.code} · {unit.name}</span>
+                <span className={`chip ${RAG_CHIP[rag]}`} style={{ marginLeft: 'auto' }}>
+                  {rag === 'red' ? `${requiredOpen} required open` : rag === 'amber' ? `${open.length} open` : total ? 'clear' : 'no checks'}
+                </span>
+              </div>
+              <div className="unit-check">
+                <div className="unit-check-bar"><div style={{ width: total ? `${(done / total) * 100}%` : 0 }} /></div>
+                <span className="mono">{done}/{total} safety & docs</span>
+              </div>
+              {open.length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  {open.map((c) => (
+                    <div className="comp-issues" key={c.id} title={c.how ? `How to comply: ${c.how}` : undefined} style={{ fontSize: 12.5, padding: '3px 0' }}>
+                      <span className={c.required ? 'bad' : 'warn'}>○ {c.item}</span>
+                      {c.desc && <span className="muted"> — {c.desc}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ marginTop: 10 }}>
+                <a className="btn btn-ghost btn-sm" href={`#/console/${unit.clientId}`} style={{ textDecoration: 'none' }}>Open unit checklist →</a>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Level 2 — per-employee personal compliance (RAG) */}
+      <div className="toolbar">
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 17 }}>Crew compliance (personal)</h2>
+      </div>
+      {crew.length === 0 ? (
         <div className="empty-state">No crew for this operator.</div>
       ) : (
         <div className="unit-grid">
-          {rows.map((r) => {
-            const col = STATUS_COLOR[r.status] || 'var(--neon-blue)';
-            const chip = r.status === 'compliant' ? 'chip-green' : r.status === 'expiring' ? 'chip-amber' : 'chip-red';
-            return (
-              <div className="unit-card" key={r.staffId} style={{ ['--uc' as string]: col }}>
-                <div className="ev-head">
-                  <span className="ev-swatch" style={{ color: col }} />
-                  <span className="unit-name" style={{ marginTop: 0, fontSize: 15 }}>{r.name}</span>
-                  <span className={`chip ${chip}`} style={{ marginLeft: 'auto' }}>{r.status}</span>
-                </div>
-                <div className="unit-desc">{r.role}</div>
-                <div style={{ marginTop: 10 }}>
-                  <span className={`chip ${r.rtw === 'Verified' ? 'chip-green' : 'chip-amber'}`}>RTW {r.rtw || 'Pending'}</span>
-                </div>
-                <div className="comp-issues" style={{ marginTop: 10, fontSize: 12.5 }}>
-                  {r.issues.length === 0 && r.expiringSoon.length === 0 && <span className="muted">All clear</span>}
-                  {r.issues.map((iss, i) => <span key={i} className="bad">{iss}{i < r.issues.length - 1 ? ' · ' : ''}</span>)}
-                  {r.expiringSoon.map((c, i) => <span key={`e${i}`} className="warn">{r.issues.length ? ' · ' : ''}{c.type} expiring</span>)}
-                </div>
-              </div>
-            );
-          })}
+          {crew.map(({ staff, rag }) => (
+            <CrewRagCard key={staff.id} data={data} staff={staff} rag={rag} />
+          ))}
         </div>
       )}
 
       <InformationHub data={data} clientId={activeId} />
       <UnitComplianceGuide data={data} clientId={activeId} />
+    </div>
+  );
+}
+
+/* One crew member's RAG card — expands to the exact required items; a
+   missing/expiring/expired cert clears by attaching a renewal date inline. */
+function CrewRagCard({ data, staff, rag }: {
+  data: ReturnType<typeof useOpsData>['data']; staff: Staff;
+  rag: ReturnType<typeof personalRag>;
+}) {
+  const [open, setOpen] = useState(rag.rag === 'red');
+  const [dates, setDates] = useState<Record<string, string>>({});
+  const col = RAG_COLOR[rag.rag];
+
+  async function attach(type: string) {
+    const expiry = dates[type];
+    if (!expiry) return;
+    await data.saveCert({ staffId: staff.id, type, expiry });
+    setDates((p) => ({ ...p, [type]: '' }));
+  }
+
+  return (
+    <div className="unit-card" style={{ ['--uc' as string]: col }}>
+      <div className="ev-head" style={{ cursor: 'pointer' }} onClick={() => setOpen((o) => !o)}>
+        <span className="ev-swatch" style={{ color: col }} />
+        <span className="unit-name" style={{ marginTop: 0, fontSize: 15 }}>{staff.name}</span>
+        <span className={`chip ${RAG_CHIP[rag.rag]}`} style={{ marginLeft: 'auto' }}>
+          {rag.rag === 'green' ? 'clear' : `${rag.problems} item${rag.problems !== 1 ? 's' : ''}`}
+        </span>
+        <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>{open ? '▾' : '▸'}</span>
+      </div>
+      <div className="unit-desc">{staff.role}{staff.staffNo ? ` · #${staff.staffNo}` : ''}</div>
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          {rag.items.map((it) => (
+            <div className="ud-item" key={it.type} data-on={it.state === 'ok'}>
+              <span className={`chip ${ITEM_CHIP[it.state]}`}>{it.state}</span>
+              <span className="ud-label">
+                {it.type}
+                {it.expiry && (
+                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>
+                    {' '}· {it.expiry}{typeof it.days === 'number' ? ` (${it.days}d)` : ''}
+                  </span>
+                )}
+              </span>
+              {it.type !== 'Right to work' && it.state !== 'ok' && (
+                <span className="row-inline">
+                  <input className="inp" type="date" style={{ width: 'auto', padding: '4px 6px', fontSize: 12 }}
+                    aria-label={`New expiry for ${it.type}`}
+                    value={dates[it.type] || ''}
+                    onChange={(e) => setDates((p) => ({ ...p, [it.type]: e.target.value }))} />
+                  <button className="btn btn-primary btn-sm" disabled={!dates[it.type]} onClick={() => attach(it.type)}>Attach</button>
+                </span>
+              )}
+              {it.type === 'Right to work' && it.state !== 'ok' && (
+                <button className="btn btn-primary btn-sm" onClick={() => data.save('staff', { id: staff.id, rtw: 'Verified' })}>
+                  Mark verified
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -124,6 +219,7 @@ function InformationHub({ data, clientId }: { data: ReturnType<typeof useOpsData
     [clientId, data.meta().updatedAt]
   );
   const flagged = docs.filter((d) => { const s = docState(d); return s === 'expired' || s === 'expiring'; }).length;
+  const rollup = complianceRollup(data, clientId);
 
   async function add() {
     if (!title.trim()) return;
@@ -137,8 +233,15 @@ function InformationHub({ data, clientId }: { data: ReturnType<typeof useOpsData
   return (
     <section className="card" style={{ marginTop: 22 }}>
       <div className="card-head">
-        <div className="card-title">Information Hub — documents</div>
-        {flagged > 0 && <span className="chip chip-red">{flagged} need attention</span>}
+        <div className="card-title">Information Hub</div>
+        <span className="row-inline" style={{ flexWrap: 'wrap' }}>
+          {flagged > 0 && <span className="chip chip-red">{flagged} doc{flagged !== 1 ? 's' : ''} expiring</span>}
+          {rollup.unitRequiredOpen > 0 && <span className="chip chip-red">{rollup.unitRequiredOpen} required unit checks</span>}
+          {rollup.unitRequiredOpen === 0 && rollup.unitOpen > 0 && <span className="chip chip-amber">{rollup.unitOpen} unit checks open</span>}
+          {rollup.crewRed > 0 && <span className="chip chip-red">{rollup.crewRed} crew blocked</span>}
+          {rollup.crewRed === 0 && rollup.crewProblems > 0 && <span className="chip chip-amber">{rollup.crewProblems} crew items</span>}
+          {flagged === 0 && rollup.unitOpen === 0 && rollup.crewProblems === 0 && <span className="chip chip-green">all clear</span>}
+        </span>
       </div>
       {docs.length === 0 ? (
         <div className="muted" style={{ fontSize: 13 }}>No documents registered. Add insurance, licences, hygiene certificates and RAMS so expiry is tracked in one place.</div>
