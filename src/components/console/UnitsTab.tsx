@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { OpsData } from '../../data/opsData';
-import type { Unit, StockLine, ChecklistItem } from '../../data/types';
+import type { Unit, StockLine, ChecklistItem, PalBranch } from '../../data/types';
 import { unitColor } from './unitTheme';
 import { generateResearch } from '../../data/phase12';
 
@@ -174,9 +174,57 @@ export function UnitsTab({ data, clientId }: Props) {
       )}
 
       {editing && (
-        <UnitEditor value={editing} onCancel={() => setEditing(null)} onSave={save} />
+        <UnitEditor value={editing} branches={data.all<PalBranch>('palBranches')} onCancel={() => setEditing(null)} onSave={save} />
       )}
+
+      <BranchManager data={data} />
     </div>
+  );
+}
+
+/* PAL branch directory — add/remove branches; units pick one in the editor. */
+function BranchManager({ data }: { data: OpsData }) {
+  const branches = data.all<PalBranch>('palBranches').sort((a, b) => a.name.localeCompare(b.name));
+  const units = data.all<Unit>('units');
+  const [name, setName] = useState('');
+  const [region, setRegion] = useState('');
+
+  async function add() {
+    if (!name.trim()) return;
+    setName(''); setRegion('');
+    await data.save<Partial<PalBranch>>('palBranches', { name: name.trim(), region: region.trim() || undefined });
+  }
+  async function del(b: PalBranch) {
+    const n = units.filter((u) => u.branchId === b.id).length;
+    if (confirm(`Delete branch "${b.name}"?${n ? ` ${n} unit${n !== 1 ? 's' : ''} will be unlinked.` : ''}`)) {
+      await data.remove('palBranches', b.id);
+    }
+  }
+
+  return (
+    <section className="card" style={{ marginTop: 18 }}>
+      <div className="card-head"><div className="card-title">PAL branches</div>
+        <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>{branches.length}</span>
+      </div>
+      {branches.length === 0 ? (
+        <div className="muted" style={{ fontSize: 12.5 }}>No branches yet — add one, then link units to it in the unit editor.</div>
+      ) : branches.map((b) => {
+        const n = units.filter((u) => u.branchId === b.id).length;
+        return (
+          <div className="ov-ev" key={b.id}>
+            <span className="ov-ev-name">{b.name}</span>
+            {b.region && <span className="muted" style={{ fontSize: 12 }}>{b.region}</span>}
+            <span className="mono ov-ev-date">{n} unit{n !== 1 ? 's' : ''}</span>
+            <button className="btn btn-ghost btn-sm" aria-label={`Delete ${b.name}`} onClick={() => del(b)}>✕</button>
+          </div>
+        );
+      })}
+      <div className="row-inline" style={{ marginTop: 10 }}>
+        <input className="inp" placeholder="Branch name" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(); }} />
+        <input className="inp" placeholder="Region (optional)" value={region} onChange={(e) => setRegion(e.target.value)} style={{ maxWidth: 160 }} />
+        <button className="btn btn-primary btn-sm" onClick={add} disabled={!name.trim()}>Add</button>
+      </div>
+    </section>
   );
 }
 
@@ -299,8 +347,8 @@ function UnitDetailsEditor({ data, unit, detail, onClose }: {
   );
 }
 
-function UnitEditor({ value, onCancel, onSave }: {
-  value: Partial<Unit>; onCancel: () => void; onSave: (u: Partial<Unit>) => void;
+function UnitEditor({ value, branches, onCancel, onSave }: {
+  value: Partial<Unit>; branches: PalBranch[]; onCancel: () => void; onSave: (u: Partial<Unit>) => void;
 }) {
   const [u, setU] = useState<Partial<Unit>>({ ...value });
   const set = (k: keyof Unit, v: unknown) => setU((p) => ({ ...p, [k]: v }));
@@ -316,7 +364,13 @@ function UnitEditor({ value, onCancel, onSave }: {
           </select>
         </label>
         <label>Crew target<input className="inp" type="number" min={0} value={u.crew ?? 0} onChange={(e) => set('crew', Number(e.target.value))} /></label>
-        <label style={{ gridColumn: 'span 2' }}>Description<input className="inp" value={u.desc || ''} onChange={(e) => set('desc', e.target.value)} /></label>
+        <label>PAL branch
+          <select className="sel" value={u.branchId || ''} onChange={(e) => set('branchId', e.target.value || undefined)}>
+            <option value="">None</option>
+            {branches.map((b) => <option key={b.id} value={b.id}>{b.name}{b.region ? ` (${b.region})` : ''}</option>)}
+          </select>
+        </label>
+        <label>Description<input className="inp" value={u.desc || ''} onChange={(e) => set('desc', e.target.value)} /></label>
       </div>
       {!u.id && <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>Creating a unit seeds the default stock catalogue for its type.</p>}
       <div className="row-inline" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
